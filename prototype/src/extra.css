@@ -118,3 +118,18 @@
 .prov{font-weight:500}
 .prov.own,.prov.union{color:var(--teal)}
 .prov.ext{color:#8A5A00}
+
+/* circulation: student profile */
+.profile{margin:4px 0 16px}
+.pstats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:10px}
+.pstats>div{padding:12px 14px;border:1px solid var(--line);border-radius:12px;background:var(--white)}
+.pstats b{display:block;font:600 1.6rem/1.15 var(--ui);color:var(--ink)}
+.pstats span{font:400 .8rem var(--ui);color:var(--ink-2)}
+.pstats .bad{border-color:#F3C9C4;background:#FDECEA}
+.pstats .bad b{color:#9B2C1F}
+.sub-seg{margin-top:12px}
+.sub-seg button{display:flex;align-items:center;justify-content:center;gap:6px}
+.sub-seg button svg{width:18px;height:18px}
+.list-h{font:600 .95rem var(--ui);margin:18px 0 6px}
+.late-txt{color:#9B2C1F;font-weight:500}
+@media (max-width:560px){.pstats{grid-template-columns:1fr 1fr 1fr;gap:6px}.pstats b{font-size:1.25rem}}
