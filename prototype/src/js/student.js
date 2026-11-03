@@ -240,7 +240,7 @@ function sLate() {
       <section class="sec"><p class="muted">เข้าสู่ระบบที่เมนู "ของฉัน" เพื่อดูว่ามีเล่มไหนเกินกำหนดคืนบ้าง</p>
         <a class="btn primary" href="#/s/me" style="width:100%;margin-top:12px">ไปที่หน้าเข้าสู่ระบบ</a></section>`, 'late')
   };
-  const late = overdueOf(st.id), total = fineTotal(st.id);
+  const late = overdueOf(st.id), total = fineTotal(st.id), owed = owedOf(st.id);
   const soon = loansOf(st.id).filter(l => lateDays(l) === 0).sort((a, b) => a.due - b.due);
   const row = l => {
     const b = BY[l.bc], d = lateDays(l);
@@ -252,17 +252,17 @@ function sLate() {
   return {
     title: 'เกินกำหนด', html: sWrap(`
     <div class="s-head" style="padding:16px 16px 4px"><h1 tabindex="-1">หนังสือเกินกำหนด</h1></div>
-    ${late.length ? `
+    ${late.length || owed ? `
     <section class="sec">
       <div class="fine-box" role="status">
         <div class="small">ค่าปรับรวมถึงวันนี้</div>
         <div class="fine-num num">${fmt(total)} บาท</div>
-        <div class="small">${late.length} เล่ม ชำระที่เคาน์เตอร์ห้องสมุดตอนนำหนังสือมาคืน</div>
+        <div class="small">${late.length ? `${late.length} เล่มที่ยังไม่คืน` : ''}${late.length && owed ? ' และ' : ''}${owed ? `ค่าปรับจากเล่มที่คืนล่าช้าแล้ว ${owed} บาท` : ''} ชำระที่เคาน์เตอร์ห้องสมุด</div>
       </div>
       <p class="small muted" style="margin-top:10px">ค่าปรับคิดวันละ ${FINE_RATE} บาทต่อเล่ม นับทุกวันรวมวันหยุด และจะเพิ่มขึ้นทุกวันจนกว่าจะนำมาคืน</p>
     </section>
-    <section class="sec"><div class="sec-h"><h2>รายการที่เกินกำหนด</h2></div>
-      <div class="stack">${late.map(row).join('')}</div></section>`
+    ${late.length ? `<section class="sec"><div class="sec-h"><h2>รายการที่เกินกำหนด</h2></div>
+      <div class="stack">${late.map(row).join('')}</div></section>` : ''}`
       : `<section class="sec"><div class="msg ok" style="margin:0">ไม่มีหนังสือเกินกำหนด ไม่มีค่าปรับค้างชำระ</div>
       <p class="small muted" style="margin-top:10px">หน้านี้จะแจ้งเตือนทันทีที่มีเล่มใดเลยวันครบกำหนดคืน</p></section>`}
     ${soon.length ? `<section class="sec"><div class="sec-h"><h2>ใกล้ครบกำหนด ${soon.length} เล่ม</h2></div>

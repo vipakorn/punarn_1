@@ -432,6 +432,20 @@ function dcDialog(bc) {
 /* ---------- นักเรียนที่ใช้บริการมากที่สุด (FR-M9-04, FR-M6-01) ---------- */
 const STU_AFF = {};
 const affOf = k => STU_AFF[k] || (STU_AFF[k] = STUDENTS.map(s => Math.pow(hash(s.id + k) / 4294967296, k === 'loans' ? 6 : 5)));
+/* ยอดยืมรายคนในปีงบประมาณปัจจุบัน ใช้แบบจำลองเดียวกับรายงานนักเรียนที่ใช้บริการมากที่สุด */
+let YEAR_LOANS = null;
+function yearLoans(sid) {
+  if (!YEAR_LOANS) {
+    const aff = affOf('loans'), tally = new Array(STUDENTS.length).fill(0);
+    periodMonths('year', String(FY_NOW)).forEach(mo => {
+      const w = aff.map((a, i) => a * (0.55 + hash(STUDENTS[i].id + mo.y + '-' + mo.m) / 4294967296 * 0.9));
+      apportion(mo.loans, w).forEach((v, i) => tally[i] += v);
+    });
+    YEAR_LOANS = Object.fromEntries(STUDENTS.map((s, i) => [s.id, tally[i]]));
+  }
+  const live = S.log.filter(x => x.type === 'borrow' && x.live && x.sid === sid).length;
+  return Math.max(YEAR_LOANS[sid] || 0, (SBY[sid] && SBY[sid].ls) || 0) + live;
+}
 function topStudents(months, kind, n = 10) {
   const aff = affOf(kind), tally = new Array(STUDENTS.length).fill(0);
   months.forEach(mo => {

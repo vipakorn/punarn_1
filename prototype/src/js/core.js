@@ -202,7 +202,10 @@ const FINE_RATE = 1;
 const lateDays = l => Math.max(0, -diffDays(l.due, TODAY));
 const fineOf = l => lateDays(l) * FINE_RATE;
 const overdueOf = sid => loansOf(sid).filter(l => lateDays(l) > 0).sort((a, b) => a.due - b.due);
-const fineTotal = sid => overdueOf(sid).reduce((a, l) => a + fineOf(l), 0);
+/* ค่าปรับค้างชำระจากเล่มที่คืนล่าช้าไปแล้ว (บันทึกตอนรับคืน) */
+const owedOf = sid => (S.fineOwed && S.fineOwed[sid]) || 0;
+const addOwed = (sid, baht) => { if (baht > 0) { S.fineOwed = S.fineOwed || {}; S.fineOwed[sid] = owedOf(sid) + baht; } };
+const fineTotal = sid => overdueOf(sid).reduce((a, l) => a + fineOf(l), 0) + owedOf(sid);
 const todayVisits = () => S.visits.filter(v => diffDays(v.t, TODAY) === 0);
 const todayLog = type => S.log.filter(x => x.type === type && diffDays(x.t, TODAY) === 0);
 
