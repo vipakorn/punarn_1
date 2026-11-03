@@ -140,6 +140,7 @@ function viewExec(q) {
   const filtTxt = [F.grade && GRADE_OPTS.find(g => g[0] === F.grade)[1], F.gender && (F.gender === 'f' ? 'นักเรียนหญิง' : 'นักเรียนชาย'), F.slot && SLOTS.find(s => s[0] === F.slot)[1]].filter(Boolean).join(' ');
   const html = `<header class="e-top">${schoolMark('ภาพรวมห้องสมุดสำหรับผู้บริหาร')}<span class="grow"></span><span class="small muted noprint">ข้อมูลถึง ${thDate(TODAY)}</span><button class="btn noprint acts" data-print>${ICON.print}ดาวน์โหลด PDF</button>${fszControl()}</header>
     <main class="e-body">
+      ${execTabs('#/e')}
       <h1 tabindex="-1" style="margin-bottom:4px">การใช้ห้องสมุด ${semName(sem)}</h1>
       <p class="muted" style="margin-bottom:18px">${filtTxt ? `กรองเฉพาะ ${esc(filtTxt)} ` : ''}ตัวเลขทั้งหมดเป็นยอดรวม ไม่แสดงข้อมูลนักเรียนรายบุคคล</p>
       <form class="frow" data-ef aria-label="ตัวกรอง">
@@ -177,6 +178,88 @@ function viewExec(q) {
       const f = $('[data-ef]', root);
       f.addEventListener('change', () => { const d = Object.fromEntries(new FormData(f)); Object.keys(d).forEach(k => d[k] === '' && delete d[k]); history.replaceState(null, '', '#/e?' + new URLSearchParams(d)); refresh(); });
       $('[data-clear]', root)?.addEventListener('click', () => { history.replaceState(null, '', '#/e?sem=' + F.sem); refresh(); });
+      $('[data-print]', root).addEventListener('click', () => window.print());
+      $$('[data-table]', root).forEach(b => b.addEventListener('click', () => { const t = $('#' + b.dataset.table); t.hidden = !t.hidden; b.setAttribute('aria-expanded', !t.hidden); b.textContent = t.hidden ? 'ดูเป็นตาราง' : 'ซ่อนตาราง'; }));
+      bindTips(root);
+    }
+  };
+}
+
+/* ================= Executive: งบประมาณทรัพยากรสารสนเทศ (FR-M6-04, FR-M2-03) ================= */
+const Q_OPTS = [['', 'ทั้งปีงบประมาณ'], ...[1, 2, 3, 4].map(q => [String(q), `ไตรมาส ${q} (${qRange(q)})`])];
+const acqIn = (fy, q) => BOOKS.filter(b => b.fy === fy && (!q || b.fq === q));
+function acqSum(list) {
+  const don = list.filter(b => b.donated), bought = list.length - don.length;
+  const spend = list.reduce((a, b) => a + b.spend, 0);
+  return { n: list.length, spend, bought, donN: don.length, donVal: don.reduce((a, b) => a + b.price, 0), avg: bought ? spend / bought : 0 };
+}
+function execTabs(cur) {
+  const tab = (h, t) => `<a href="${h}" ${cur === h ? 'aria-current="page"' : ''}>${t}</a>`;
+  return `<nav class="seg noprint" aria-label="มุมมองผู้บริหาร" style="max-width:520px;margin-bottom:18px">${tab('#/e', 'การใช้ห้องสมุด')}${tab('#/e/budget', 'งบประมาณทรัพยากรสารสนเทศ')}</nav>`;
+}
+function viewExecBudget(q) {
+  const fy = FY_LIST.includes(+q.fy) ? +q.fy : FY_NOW;
+  const by = q.by === 'q' ? 'q' : 'fy';
+  const qs = by === 'q' && ['1', '2', '3', '4'].includes(q.q) ? +q.q : 0;
+  const cur = acqSum(acqIn(fy, qs));
+  const prev = FY_LIST.includes(fy - 1) ? acqSum(acqIn(fy - 1, qs)) : null;
+  const partial = fy === FY_NOW;
+  const periodTxt = qs ? `ไตรมาส ${qs} (${qRange(qs)}) ปีงบประมาณ ${fy}` : `ปีงบประมาณ ${fy}`;
+  const delta = (a, b, unit) => {
+    if (!prev || !b) return `<div class="delta">ไม่มีข้อมูลช่วงเดียวกันปีก่อน</div>`;
+    const p = Math.round((a - b) / b * 100);
+    return `<div class="delta ${p > 0 ? 'up' : p < 0 ? 'down' : ''}">${p > 0 ? '+' : ''}${p}% จาก${qs ? 'ไตรมาสเดียวกัน' : ''}ปีงบประมาณ ${fy - 1} (${unit === 'บาท' ? baht(b) : fmt(b) + ' ' + unit})</div>`;
+  };
+  const fyBars = FY_LIST.map(y => { const s = acqSum(acqIn(y, qs)); return { group: '', label: String(y), v: s.spend, hi: y === fy, lab: y === fy ? fmt(s.spend) : '', tip: `<b>ปีงบประมาณ ${y}</b>${qs ? `|ไตรมาส ${qs} (${qRange(qs)})` : ''}|จัดหา ${baht(s.spend)}|${fmt(s.bought)} รายการ${y === FY_NOW ? '|ถึง 14 ก.ย. 2569' : ''}` }; });
+  const qBars = [1, 2, 3, 4].map(i => { const s = acqSum(acqIn(fy, i)); return { group: '', label: `ไตรมาส ${i}`, v: s.spend, hi: !qs || qs === i, lab: fmt(s.spend), tip: `<b>ไตรมาส ${i}</b> ${qRange(i)}|จัดหา ${baht(s.spend)}|${fmt(s.bought)} รายการ${partial && i === 4 ? '|ถึง 14 ก.ย. 2569' : ''}` }; });
+  const bars = by === 'q' ? qBars : fyBars;
+  const list = acqIn(fy, qs);
+  const byType = ['text', 'exam', 'lit', 'nf', 'comic', 'ref'].map(g => {
+    const it = list.filter(b => b.g === g && !b.donated), v = it.reduce((a, b) => a + b.spend, 0);
+    return { label: TYPE_LABEL[g], v, lab: fmt(v), hi: true, tip: `<b>${TYPE_LABEL[g]}</b>|${baht(v)}|${fmt(it.length)} รายการ` };
+  }).sort((a, b) => b.v - a.v);
+  const byFund = FUNDS.map(([f]) => {
+    const it = list.filter(b => b.fund === f), v = it.reduce((a, b) => a + (b.donated ? b.price : b.spend), 0);
+    return { label: f, v, lab: fmt(v), hi: f !== 'รับบริจาค', tip: `<b>${f}</b>|${baht(v)}${f === 'รับบริจาค' ? ' (มูลค่าประเมิน ไม่ใช่เงินงบประมาณ)' : ''}|${fmt(it.length)} รายการ` };
+  }).sort((a, b) => b.v - a.v);
+  const rows = [...list].sort((a, b) => b.acq - a.acq);
+  const sel = (name, label, opts, val) => `<label class="field"><span>${label}</span><select class="input" name="${name}">${opts.map(([v, t]) => `<option value="${v}" ${String(val) === v ? 'selected' : ''}>${t}</option>`).join('')}</select></label>`;
+  const html = `<header class="e-top">${schoolMark('ภาพรวมห้องสมุดสำหรับผู้บริหาร')}<span class="grow"></span><span class="small muted noprint">ข้อมูลถึง ${thDate(TODAY)}</span><button class="btn noprint acts" data-print>${ICON.print}ดาวน์โหลด PDF</button>${fszControl()}</header>
+    <main class="e-body">
+      ${execTabs('#/e/budget')}
+      <h1 tabindex="-1" style="margin-bottom:4px">งบประมาณทรัพยากรสารสนเทศ ${esc(periodTxt)}</h1>
+      <p class="muted" style="margin-bottom:18px">ปีงบประมาณเริ่ม 1 ตุลาคม และสิ้นสุด 30 กันยายน${partial ? ' ข้อมูลปีงบประมาณปัจจุบันนับถึง 14 ก.ย. 2569 จึงยังไม่ครบปี' : ''}</p>
+      <form class="frow" data-bf aria-label="เลือกช่วงเวลา">
+        ${sel('fy', 'ปีงบประมาณ', [...FY_LIST].reverse().map(y => [String(y), `ปีงบประมาณ ${y}${y === FY_NOW ? ' (ปัจจุบัน)' : ''}`]), fy)}
+        ${sel('by', 'แสดงเป็น', [['fy', 'เปรียบเทียบรายปีงบประมาณ'], ['q', 'แยกรายไตรมาส']], by)}
+        ${by === 'q' ? sel('q', 'ไตรมาส', Q_OPTS, qs || '') : ''}
+      </form>
+      <section class="strip" aria-label="ตัวเลขสรุป">
+        <div><div class="lab">งบประมาณที่ใช้จัดหา</div><div class="val num">${fmt(cur.spend)}</div><div class="small muted">บาท</div>${delta(cur.spend, prev && prev.spend, 'บาท')}</div>
+        <div><div class="lab">รายการที่รับเข้า</div><div class="val num">${fmt(cur.n)}</div><div class="small muted">รายการ (จัดซื้อ ${fmt(cur.bought)} รับบริจาค ${fmt(cur.donN)})</div>${delta(cur.n, prev && prev.n, 'รายการ')}</div>
+        <div><div class="lab">ราคาเฉลี่ยต่อรายการ</div><div class="val num">${fmt(Math.round(cur.avg))}</div><div class="small muted">บาท เฉพาะรายการที่จัดซื้อ</div>${delta(Math.round(cur.avg), prev && Math.round(prev.avg), 'บาท')}</div>
+        <div><div class="lab">มูลค่าที่ได้รับบริจาค</div><div class="val num">${fmt(cur.donVal)}</div><div class="small muted">บาท ไม่นับเป็นเงินงบประมาณ</div>${delta(cur.donVal, prev && prev.donVal, 'บาท')}</div>
+      </section>
+      <div class="charts">
+        <section class="panel chart wide" aria-labelledby="b1"><div class="chart-h"><h2 id="b1">${by === 'q' ? `งบประมาณที่ใช้รายไตรมาส ปีงบประมาณ ${fy}` : 'งบประมาณที่ใช้รายปีงบประมาณ'}</h2><button type="button" class="linkbtn" data-table="bt1" aria-expanded="false">ดูเป็นตาราง</button></div>
+          <p class="chart-sub">หน่วย: บาท ไม่รวมทรัพยากรที่ได้รับบริจาค${by === 'q' ? ' ไตรมาส 1 คือ ต.ค.–ธ.ค.' : ''}</p>
+          ${chartCols(bars, { w: 1040, h: 260, pad: 150, aria: 'กราฟแท่งงบประมาณที่ใช้จัดหาทรัพยากรสารสนเทศ' })}
+          <div id="bt1" hidden><table class="tbl" style="margin-top:12px"><thead><tr><th>ช่วงเวลา</th><th class="num">จัดซื้อ (รายการ)</th><th class="num">งบที่ใช้ (บาท)</th><th class="num">รับบริจาค (รายการ)</th><th class="num">มูลค่าบริจาค (บาท)</th></tr></thead><tbody>${(by === 'q' ? [1, 2, 3, 4].map(i => [`ไตรมาส ${i} (${qRange(i)})`, acqSum(acqIn(fy, i))]) : FY_LIST.map(y => [`ปีงบประมาณ ${y}`, acqSum(acqIn(y, qs))])).map(([lb, s]) => `<tr><td>${esc(lb)}</td><td class="num">${fmt(s.bought)}</td><td class="num">${fmt(s.spend)}</td><td class="num">${fmt(s.donN)}</td><td class="num">${fmt(s.donVal)}</td></tr>`).join('')}</tbody></table></div>
+        </section>
+        <section class="panel chart" aria-labelledby="b2"><div class="chart-h"><h2 id="b2">แยกตามประเภททรัพยากร</h2></div><p class="chart-sub">${esc(periodTxt)} หน่วย: บาท</p>${chartRows(byType, { w: 520, left: 160, aria: 'กราฟแท่งแนวนอนงบประมาณตามประเภททรัพยากร' })}</section>
+        <section class="panel chart" aria-labelledby="b3"><div class="chart-h"><h2 id="b3">แยกตามแหล่งงบประมาณ</h2></div><p class="chart-sub">${esc(periodTxt)} หน่วย: บาท แถบจางคือรายการรับบริจาค</p>${chartRows(byFund, { w: 520, left: 170, aria: 'กราฟแท่งแนวนอนงบประมาณตามแหล่งที่มา' })}</section>
+        <section class="panel chart wide" aria-labelledby="b4"><div class="chart-h"><h2 id="b4">รายการที่รับเข้าใน${esc(periodTxt)}</h2><button type="button" class="linkbtn" data-table="bt2" aria-expanded="false">ดูเป็นตาราง</button></div>
+          <p class="chart-sub">${fmt(rows.length)} รายการ เรียงตามวันที่รับเข้าล่าสุด</p>
+          <div id="bt2" hidden><table class="tbl" style="margin-top:12px"><thead><tr><th>วันที่รับเข้า</th><th>เลขทะเบียน</th><th>ชื่อเรื่อง</th><th>ประเภท</th><th>แหล่งงบประมาณ</th><th class="num">ราคา (บาท)</th></tr></thead><tbody>${rows.map(b => `<tr><td>${thDate(b.acq)}</td><td>${esc(b.bc)}</td><td>${esc(shortTitle(b.t))}</td><td>${esc(TYPE_LABEL[b.g])}</td><td>${esc(b.fund)}</td><td class="num">${fmt(b.price)}${b.donated ? ' *' : ''}</td></tr>`).join('')}</tbody></table><p class="small muted" style="margin-top:8px">* มูลค่าประเมินของทรัพยากรที่ได้รับบริจาค ไม่นับเป็นเงินงบประมาณที่ใช้</p></div>
+        </section>
+      </div>
+      <p class="small muted" style="margin-top:18px">ตัวเลขคำนวณจากราคาและวันที่รับเข้าที่บันทึกไว้ในระเบียนตัวเล่ม ใช้ประกอบการรายงานงานพัสดุและการจัดทำคำของบประมาณ</p>
+    </main>`;
+  return {
+    title: 'งบประมาณทรัพยากรสารสนเทศ', html,
+    mount(root) {
+      const f = $('[data-bf]', root);
+      f.addEventListener('change', () => { const d = Object.fromEntries(new FormData(f)); Object.keys(d).forEach(k => d[k] === '' && delete d[k]); history.replaceState(null, '', '#/e/budget?' + new URLSearchParams(d)); refresh(); });
       $('[data-print]', root).addEventListener('click', () => window.print());
       $$('[data-table]', root).forEach(b => b.addEventListener('click', () => { const t = $('#' + b.dataset.table); t.hidden = !t.hidden; b.setAttribute('aria-expanded', !t.hidden); b.textContent = t.hidden ? 'ดูเป็นตาราง' : 'ซ่อนตาราง'; }));
       bindTips(root);

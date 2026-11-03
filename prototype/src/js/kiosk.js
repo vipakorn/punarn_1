@@ -83,7 +83,7 @@ function viewKiosk() {
       const askPin = () => openDialog(`<h2 id="dlg-h">ออกจากโหมด kiosk</h2><p class="muted">ใส่ PIN ของครูผู้รับผิดชอบห้องสมุด (ทดลอง: 1234)</p>
         <form data-pin style="margin-top:14px"><label class="field"><span>PIN</span><input class="input" name="pin" type="password" inputmode="numeric" maxlength="6" autocomplete="off" data-autofocus></label><div id="pin-msg" aria-live="assertive"></div>
         <div class="acts"><button type="button" class="btn" data-close>กลับไปหน้า kiosk</button><button class="btn primary">ออกจากโหมด kiosk</button></div></form>`, d => {
-        $('[data-pin]', d).addEventListener('submit', e => { e.preventDefault(); if (e.target.pin.value === S.pin) { closeDialog(); go(S.role === 'assistant' ? '#/a/circ' : '#/t/today'); } else { $('#pin-msg').innerHTML = '<div class="msg err" role="alert">PIN ไม่ถูกต้อง ลองอีกครั้ง</div>'; e.target.pin.select(); } });
+        $('[data-pin]', d).addEventListener('submit', e => { e.preventDefault(); if (e.target.elements.pin.value === S.pin) { closeDialog(); go(S.role === 'assistant' ? '#/a/circ' : '#/t/today'); } else { $('#pin-msg').innerHTML = '<div class="msg err" role="alert">PIN ไม่ถูกต้อง ลองอีกครั้ง</div>'; e.target.pin.select(); } });
       });
       ex.addEventListener('pointerdown', () => { hold = setTimeout(askPin, 1000); });
       ['pointerup', 'pointerleave', 'pointercancel'].forEach(t => ex.addEventListener(t, () => clearTimeout(hold)));

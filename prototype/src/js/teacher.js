@@ -5,7 +5,7 @@ const ME = () => isA() ? { name: fullName(SBY['43105']), sub: cls(SBY['43105']),
 function tNav() {
   if (isA()) return [{ items: [['circ', 'ยืม-คืน', 'circ'], ['catalog', 'ลงหนังสือใหม่ (ร่าง)', 'catalog'], ['#/k', 'เปิด kiosk', 'kiosk'], ['help', 'คู่มือยุวบรรณารักษ์', 'help']] }];
   return [
-    { items: [['today', 'วันนี้', 'today'], ['circ', 'ยืม-คืน', 'circ'], ['catalog', 'ลงหนังสือใหม่', 'catalog'], ['labels', 'พิมพ์ป้าย', 'labels'], ['items', 'ทรัพยากรทั้งหมด', 'items'], ['visits', 'การเข้าใช้พื้นที่', 'visits'], ['reports', 'รายงาน', 'report'], ['#/k', 'เปิด kiosk', 'kiosk']] },
+    { items: [['today', 'วันนี้', 'today'], ['circ', 'ยืม-คืน', 'circ'], ['catalog', 'ลงหนังสือใหม่', 'catalog'], ['labels', 'พิมพ์เลขเรียกหนังสือและบาร์โค้ด', 'labels'], ['items', 'ทรัพยากรสารสนเทศ', 'items'], ['visits', 'การเข้าใช้พื้นที่', 'visits'], ['reports', 'รายงาน', 'report'], ['top', 'นักเรียนที่ใช้บริการมากที่สุด', 'users'], ['#/k', 'เปิด kiosk', 'kiosk']] },
     { grp: 'ตั้งค่าโรงเรียน', items: [['admin/import', 'นำเข้านักเรียน', 'import'], ['admin/users', 'ผู้ใช้และสิทธิ์', 'users'], ['admin/settings', 'ตั้งค่าโรงเรียน', 'settings'], ['admin/export', 'ส่งออกข้อมูล', 'export']] },
     { grp: 'ช่วยเหลือ', items: [['help', 'คู่มือการใช้งาน', 'help']] }
   ];
@@ -28,7 +28,7 @@ function viewTeacher(p, q) {
   if (isA() && !['circ', 'catalog', 'help'].includes(page)) {
     return { title: 'ไม่มีสิทธิ์', html: tShell('', 'หน้านี้สำหรับครู', `<div class="panel"><h2>หน้านี้สำหรับครูผู้รับผิดชอบห้องสมุด</h2><p class="muted" style="margin-top:6px">ยุวบรรณารักษ์ใช้ได้เฉพาะยืม-คืน ลงรายการเป็นร่าง และเปิด kiosk</p><p style="margin-top:16px"><a class="btn primary" href="#/a/circ">ไปหน้ายืม-คืน</a></p></div>`) };
   }
-  const V = { today: tToday, circ: tCirc, catalog: tCatalog, labels: tLabels, items: tItems, visits: tVisits, reports: tReports, 'admin/import': tImport, 'admin/users': tUsers, 'admin/settings': tSettings, 'admin/export': tExport, help: tHelp }[page];
+  const V = { today: tToday, circ: tCirc, catalog: tCatalog, labels: tLabels, items: tItems, visits: tVisits, reports: tReports, top: tTop, 'admin/import': tImport, 'admin/users': tUsers, 'admin/settings': tSettings, 'admin/export': tExport, help: tHelp }[page];
   if (!V) return { html: tShell('', 'ไม่พบหน้านี้', `<div class="panel"><p>ไม่พบหน้าที่ต้องการ</p><p style="margin-top:12px"><a class="btn" href="${base()}${isA() ? 'circ' : 'today'}">กลับหน้าแรก</a></p></div>`) };
   const v = V(q);
   return { title: v.title, html: tShell(page, v.title, v.body, v.actions || ''), mount: v.mount };
@@ -59,7 +59,7 @@ function tToday() {
           ${od.map(l => { const s = SBY[l.sid], bk = BY[l.bc]; return `<tr><td>${esc(fullName(s))}</td><td>${cls(s)}</td><td class="t">${esc(shortTitle(bk.t))}</td><td class="num"><span class="pill late">${-diffDays(l.due, TODAY)} วัน</span></td></tr>`; }).join('')}
           </tbody></table><p class="small muted" style="margin-top:10px">นักเรียนเห็นวันครบกำหนดในหน้า "ของฉัน" ของตัวเองด้วย</p>` : '<p class="muted">ไม่มีหนังสือเกินกำหนด</p>'}
         </section>
-        <section class="panel" aria-labelledby="dr-h"><div class="panel-h"><h2 id="dr-h">ร่างจากยุวบรรณารักษ์รอตรวจ ${S.drafts.length} รายการ</h2></div>
+        <section class="panel" aria-labelledby="dr-h"><div class="panel-h"><h2 id="dr-h">ร่างการลงรายการจากยุวบรรณารักษ์ ${S.drafts.length} รายการ</h2></div>
           ${S.drafts.length ? `<table class="tbl"><tbody>${S.drafts.map(d => `<tr><td style="width:48px">${cover(d)}</td><td><div class="t">${esc(shortTitle(d.t))}</div><div class="small muted">ลงโดย ${esc(SBY[d.by].first)} (${cls(SBY[d.by])}) เวลา ${hhmm(d.at)} น.</div></td><td class="num"><button class="btn sm" data-draft="${d.id}">ตรวจร่าง</button></td></tr>`).join('')}</tbody></table>` : '<p class="muted">ไม่มีร่างรอตรวจ</p>'}
         </section>
       </div>
@@ -271,15 +271,15 @@ function tCatalog() {
   return {
     title: A ? 'ลงหนังสือใหม่ (บันทึกเป็นร่าง)' : 'ลงหนังสือใหม่',
     body: `<div class="wiz"><div class="panel" id="wiz"></div>
-      <aside class="panel side-note"><h3>ลงหนังสือใหม่ใน 3 ขั้น</h3><ol><li>สแกนหรือพิมพ์เลข ISBN ที่ปกหลัง ระบบหาข้อมูลจากฐานกลางให้</li><li>ดูว่าข้อมูลตรงกับเล่มในมือ</li><li>ใส่ข้อมูลของเล่มนี้ แล้ว${A ? 'ส่งให้ครูตรวจ' : 'พิมพ์ป้าย'}</li></ol>
-      <p class="small muted" style="margin-top:12px">หนังสือไม่มี ISBN ก็ลงได้ ระบบจะแนะนำเลขหมู่ให้เลือก</p>
+      <aside class="panel side-note"><h3>ลงหนังสือใหม่ใน 3 ขั้น</h3><ol><li>สแกนหรือพิมพ์เลข ISBN ที่ปกหลัง ระบบค้นให้ตามลำดับ 4 ชั้น</li><li>ดูว่าข้อมูลตรงกับเล่มในมือ</li><li>ใส่ข้อมูลของเล่มนี้ แล้ว${A ? 'ส่งให้ครูตรวจ' : 'พิมพ์ป้าย'}</li></ol>
+      <p class="small muted" style="margin-top:12px">หนังสือไม่มี ISBN ก็ลงได้ ระบบจะแนะนำเลขหมู่ให้เลือก</p><h3 style="margin-top:14px">ลำดับการค้นหา</h3><ol class="small muted" style="margin-top:6px"><li>คลังของโรงเรียนนี้</li><li>ฐานกลางปันอ่าน</li><li>แหล่งภายนอก (Open Library, Google Books)</li><li>ครูกรอกเอง แล้วส่งเข้าฐานกลาง</li></ol><p class="small muted" style="margin-top:10px">ระเบียนจากแหล่งภายนอกมักไม่มีเลขหมู่ หัวเรื่องภาษาไทย และระดับชั้น ครูต้องเติมก่อนบันทึก</p>
       <p style="margin-top:10px"><a class="small" href="${base()}help#ddc">เลขหมู่คืออะไร</a></p></aside></div>`,
     mount(root) {
       const W = $('#wiz', root);
       const start = () => { if (!K.t0) K.t0 = Date.now(); };
       const stepper = () => { const n = K.step; const s = (i, t) => `<span class="${i < n ? 'done' : i === n ? 'on' : ''}"><i>${i < n ? '&#10003;' : i}</i>${t}</span>`; return `<div class="stepper">${s(1, 'หาข้อมูลหนังสือ')}${s(2, 'ตรวจข้อมูล')}${s(3, 'ข้อมูลของเล่มนี้')}</div>`; };
       const msg = () => K.msg ? `<div class="msg ${K.msg.k}" role="${K.msg.k === 'err' ? 'alert' : 'status'}"><div>${K.msg.h}</div></div>` : '';
-      const reset = () => { Object.assign(K, { step: 1, rec: null, dup: null, manual: false, msg: null, t0: null, saved: null, form: {} }); draw(); $('#isbn')?.focus(); };
+      const reset = () => { Object.assign(K, { step: 1, rec: null, dup: null, manual: false, msg: null, t0: null, saved: null, form: {}, tier: null }); draw(); $('#isbn')?.focus(); };
       function draw() {
         if (K.saved) return drawDone();
         if (K.step === 1) return draw1();
@@ -287,47 +287,89 @@ function tCatalog() {
         return draw3();
       }
       function draw1() {
-        const tries = [['9789744723635', 'แฮร์รี่ พอตเตอร์ ภาค 2'], ['9780761169253', 'Steal Like an Artist'], ['9786160470747', 'เล่มที่ห้องสมุดมีแล้ว'], ['9786160470748', 'เลขผิด']];
+        const tries = [['9789744723635', 'พบในฐานกลาง'], ['9786160470747', 'เล่มที่ห้องสมุดมีแล้ว'], ['9780140328721', 'พบที่ Open Library'], ['9786160843695', 'พบที่ Google Books'], ['9789990000009', 'ไม่พบทุกแหล่ง'], ['9786160470748', 'เลขผิด']];
         W.innerHTML = `${stepper()}<h2>สแกนหรือพิมพ์เลข ISBN ที่ปกหลัง</h2>
-          <p class="muted" style="margin:6px 0 14px">ระบบจะหาข้อมูลจากฐานข้อมูลบรรณานุกรมกลาง (union catalog) ${info('ฐานข้อมูลรายชื่อหนังสือที่โรงเรียนในเครือข่ายปันอ่านใช้ร่วมกัน ถ้าโรงเรียนอื่นลงหนังสือเล่มนี้ไว้แล้ว เราคัดลอกมาใช้ได้ทันที')} ค้นด้วยชื่อเรื่องก็ได้</p>
+          <p class="muted" style="margin:6px 0 14px">ระบบจะค้นให้เองตามลำดับ เริ่มจากคลังของโรงเรียน แล้วฐานข้อมูลบรรณานุกรมกลาง (union catalog) ${info('ฐานข้อมูลรายชื่อหนังสือที่โรงเรียนในเครือข่ายปันอ่านใช้ร่วมกัน ถ้าโรงเรียนอื่นลงหนังสือเล่มนี้ไว้แล้ว เราคัดลอกมาใช้ได้ทันที')} ค้นด้วยชื่อเรื่องก็ได้</p>
           <form class="scan" data-f1><label class="sr" for="isbn">เลข ISBN หรือชื่อเรื่อง</label><input class="input" id="isbn" autocomplete="off" placeholder="เช่น 9789744723635" data-autofocus><button class="btn primary">ค้นหา</button></form>
           <div class="try noprint"><span>ทดลอง:</span>${tries.map(([v, l]) => `<button type="button" data-try="${v}">${l}</button>`).join('')}</div>
           ${msg()}<div id="pick"></div>
           <p style="margin-top:18px"><button type="button" class="linkbtn" data-manual>หนังสือไม่มี ISBN หรือหาไม่พบ กรอกข้อมูลเอง</button></p>`;
         const f = $('[data-f1]', W);
-        f.addEventListener('submit', e => { e.preventDefault(); lookup(f.isbn.value); });
-        $$('[data-try]', W).forEach(b => b.addEventListener('click', () => { f.isbn.value = b.dataset.try; lookup(b.dataset.try); }));
+        f.addEventListener('submit', e => { e.preventDefault(); lookup(f.elements.isbn.value); });
+        $$('[data-try]', W).forEach(b => b.addEventListener('click', () => { f.elements.isbn.value = b.dataset.try; lookup(b.dataset.try); }));
         $('[data-manual]', W).addEventListener('click', () => { start(); K.manual = true; K.step = 2; K.msg = null; K.form = {}; draw(); });
-        f.isbn.addEventListener('input', start);
+        f.elements.isbn.addEventListener('input', start);
       }
+      const TIERS = [['own', 'คลังหนังสือของโรงเรียนนี้', 140], ['union', 'ฐานกลางปันอ่าน (โรงเรียนในเครือข่าย)', 300], ['ext', 'แหล่งภายนอก: Open Library, Google Books', 900]];
+      const MISS_LABEL = { ddc: 'เลขหมู่', type: 'ประเภททรัพยากร', subj: 'หัวเรื่อง', lvl: 'ระดับชั้นที่เหมาะสม' };
+      const missingOf = r => Object.keys(MISS_LABEL).filter(k => !r[k]);
       function lookup(v) {
         start(); v = String(v).trim(); const digits = v.replace(/[-\s]/g, '');
         if (!v) { K.msg = { k: 'err', h: 'พิมพ์เลข ISBN หรือชื่อเรื่องก่อน' }; return draw(); }
-        if (/^[\dXx]{10,13}$/.test(digits)) {
-          if (!isbnOk(digits)) { K.msg = { k: 'err', h: `เลข ${esc(digits)} ไม่ใช่ ISBN ที่ถูกต้อง (หลักสุดท้ายไม่ตรง) ตรวจตัวเลขอีกครั้ง หรือกรอกข้อมูลเอง` }; return draw(); }
-          const own = BOOKS.filter(b => b.isbn === digits), uc = UNION.find(u => u.isbn === digits);
-          if (own.length) { K.rec = { ...own[0], used: 12 }; K.dup = own; }
-          else if (uc) { K.rec = { ...uc }; K.dup = null; }
-          else { K.msg = { k: 'warn', h: `ไม่พบ ISBN ${esc(digits)} ในฐานข้อมูลกลาง กรอกข้อมูลเองได้ ระบบจะช่วยแนะนำเลขหมู่` }; K.form = { isbn: digits }; draw(); return; }
-          K.step = 2; K.msg = null; return draw();
-        }
-        const hits = [...UNION, ...BOOKS].filter(b => norm(b.t).includes(norm(v))).slice(0, 5);
-        if (!hits.length) { K.msg = { k: 'warn', h: `ไม่พบชื่อเรื่อง “${esc(v)}” ในฐานข้อมูลกลาง ลองคำที่สั้นลง หรือกรอกข้อมูลเอง` }; return draw(); }
+        const isIsbn = /^[\dXx]{10,13}$/.test(digits);
+        if (isIsbn && !isbnOk(digits)) { K.msg = { k: 'err', h: `เลข ${esc(digits)} ไม่ใช่ ISBN ที่ถูกต้อง (หลักสุดท้ายไม่ตรง) ตรวจตัวเลขอีกครั้ง หรือกรอกข้อมูลเอง` }; return draw(); }
         K.msg = null; draw();
-        $('#pick', W).innerHTML = `<p class="small muted" style="margin-top:14px">พบ ${hits.length} รายการ เลือกเล่มที่ตรงกับในมือ</p><div class="basket">${hits.map((h, i) => `<div class="item">${cover(h)}<div><div style="font-weight:500">${esc(h.t)}</div><div class="small muted">${esc(h.a)} ${esc(h.p)} ${esc(h.y)}</div></div><span></span><button class="btn sm" data-h="${i}">เลือก</button></div>`).join('')}</div>`;
-        $$('[data-h]', W).forEach(b => b.addEventListener('click', () => { const h = hits[+b.dataset.h]; K.rec = { ...h, used: h.used || 9 }; K.dup = BOOKS.filter(x => x.isbn && x.isbn === h.isbn); if (!K.dup.length) K.dup = null; K.step = 2; draw(); }));
+        const box = $('#pick', W);
+        box.innerHTML = `<div class="panel srcbox"><div class="small muted" style="margin-bottom:8px">ค้นหา ${esc(isIsbn ? 'ISBN ' + digits : '“' + v + '”')} ตามลำดับ</div>
+          <ol class="srcs">${TIERS.map(([k, l]) => `<li><span>${esc(l)}</span><span class="st" data-st="${k}">รอ</span></li>`).join('')}
+          <li><span>ครูกรอกเอง แล้วส่งเข้าฐานกลาง</span><span class="st" data-st="manual">รอ</span></li></ol><div id="srcout" aria-live="polite"></div></div>`;
+        const setSt = (k, txt, cls) => { const e = $(`[data-st="${k}"]`, W); if (e) { e.textContent = txt; e.className = 'st ' + (cls || ''); } };
+        const match = arr => isIsbn ? arr.filter(x => x.isbn === digits) : arr.filter(x => norm(x.t).includes(norm(v))).slice(0, 5);
+        const find = k => {
+          if (k === 'own') return match(BOOKS).map(b => ({ ...b, used: 12 }));
+          if (k === 'union') return match(UNION);
+          if (S.offline) return 'skip';
+          return match(EXT);
+        };
+        const choose = (rec, tier) => {
+          K.rec = { ...rec }; K.tier = tier;
+          K.dup = tier === 'own' ? BOOKS.filter(x => x.isbn && x.isbn === rec.isbn) : null;
+          if (K.dup && !K.dup.length) K.dup = null;
+          later(() => { K.step = 2; draw(); }, 240);
+        };
+        let i = 0;
+        const next = () => {
+          if (i >= TIERS.length) {
+            setSt('manual', 'ต้องกรอกเอง', 'warn');
+            $('#srcout', W).innerHTML = `<div class="msg warn" role="status" style="margin-top:12px"><div><b>ไม่พบในทั้งสามแหล่ง</b> กรอกข้อมูลเองได้ ระบบจะช่วยแนะนำเลขหมู่ และจะส่งระเบียนนี้เข้าฐานกลาง เพื่อให้โรงเรียนอื่นที่ซื้อเล่มเดียวกันไม่ต้องลงใหม่</div></div>
+              <p style="margin-top:12px"><button type="button" class="btn primary" data-m2>กรอกข้อมูลเอง</button></p>`;
+            $('[data-m2]', W).addEventListener('click', () => { K.manual = true; K.step = 2; K.tier = 'manual'; K.msg = null; K.form = isIsbn ? { isbn: digits } : { t: v }; draw(); });
+            return;
+          }
+          const [k, , ms] = TIERS[i];
+          setSt(k, 'กำลังค้น…', 'busy');
+          later(() => {
+            const r = find(k);
+            if (r === 'skip') { setSt(k, 'ข้าม (ออฟไลน์)', 'warn'); i++; return next(); }
+            if (!r.length) { setSt(k, 'ไม่พบ', ''); i++; return next(); }
+            setSt(k, `พบ ${r.length} รายการ`, 'ok');
+            if (r.length === 1) return choose(r[0], k);
+            $('#srcout', W).innerHTML = `<p class="small muted" style="margin-top:12px">เลือกเล่มที่ตรงกับในมือ</p><div class="basket">${r.map((h, n) => `<div class="item">${cover(h)}<div><div style="font-weight:500">${esc(h.t)}</div><div class="small muted">${esc(h.a)} ${esc(h.p)} ${esc(h.y)}</div></div><span></span><button class="btn sm" data-h="${n}">เลือก</button></div>`).join('')}</div>`;
+            $$('[data-h]', W).forEach(b => b.addEventListener('click', () => choose(r[+b.dataset.h], k)));
+          }, ms);
+        };
+        next();
       }
       function draw2() {
-        const r = K.rec;
-        const kv = [['ผู้แต่ง', r.a], ['สำนักพิมพ์', r.p], ['ปีที่พิมพ์', r.y], ['จำนวนหน้า', r.pg || 'ไม่มีในระเบียนกลาง เพิ่มได้ในขั้นถัดไป'], ['ISBN', r.isbn], ['เลขหมู่', r.ddc + ' ' + (DDC_CLASS[r.ddc[0]] || '').slice(4)]].map(([k, v]) => `<dt>${k}${k === 'เลขหมู่' ? info('ตัวเลขบอกหมวดของหนังสือตามระบบทศนิยมดิวอี้ (DDC) ใช้จัดเรียงบนชั้น หนังสือเรื่องเดียวกันจะอยู่ใกล้กัน') : ''}</dt><dd>${esc(v)}</dd>`).join('');
+        const r = K.rec, miss = missingOf(r), tier = K.tier || 'union';
+        const ddcTxt = r.ddc ? r.ddc + ' ' + (DDC_CLASS[r.ddc[0]] || '').slice(4) : 'ไม่มีในระเบียนนี้ ต้องเลือกในขั้นถัดไป';
+        const kv = [['ผู้แต่ง', r.a], ['สำนักพิมพ์', r.p], ['ปีที่พิมพ์', r.y], ['จำนวนหน้า', r.pg || 'ไม่มีในระเบียน เพิ่มได้ในขั้นถัดไป'], ['ISBN', r.isbn], ['เลขหมู่', ddcTxt]]
+          .map(([k, v]) => `<dt>${k}${k === 'เลขหมู่' ? info('ตัวเลขบอกหมวดของหนังสือตามระบบทศนิยมดิวอี้ (DDC) ใช้จัดเรียงบนชั้น หนังสือเรื่องเดียวกันจะอยู่ใกล้กัน') : ''}</dt><dd>${esc(v)}</dd>`).join('');
+        const prov = tier === 'own' ? `<p class="small prov own">พบในคลังของโรงเรียนนี้เอง ระเบียนผ่านการตรวจแล้ว</p>`
+          : tier === 'union' ? `<p class="small prov union">พบในฐานกลางปันอ่าน มีโรงเรียนใช้ระเบียนนี้ ${r.used || 1} แห่ง ผ่านการตรวจของครูมาแล้ว</p>`
+          : `<p class="small prov ext">พบที่ ${esc(r.from || 'แหล่งภายนอก')}${r.srcid ? ` (${esc(r.srcid)})` : ''} ยังไม่ผ่านการตรวจของครู</p>`;
         W.innerHTML = `${stepper()}<h2>ใช่เล่มนี้หรือไม่</h2>
-          <div class="found" style="margin-top:14px">${cover(r, { eager: true })}<div><p class="small" style="color:var(--teal);font-weight:500">พบในฐานข้อมูลกลาง มีโรงเรียนใช้ระเบียนนี้ ${r.used || 1} แห่ง</p><h3 style="font-family:var(--read);font-size:1.1rem;margin:4px 0 8px">${esc(r.t)}</h3><dl class="kv">${kv}</dl></div></div>
-          ${K.dup ? `<div class="msg warn" role="status"><div><b>ห้องสมุดมีเล่มนี้แล้ว ${K.dup.length} เล่ม</b> (เลขทะเบียน ${K.dup.map(d => d.bc).join(', ')} สถานะ ${STATUS[K.dup[0].s]}) ถ้าเป็นเล่มที่ได้มาเพิ่ม กด "ใช่ เล่มนี้" เพื่อเพิ่มเป็นอีกเล่ม (copy) ${info('หนังสือเรื่องเดียวกันหลายเล่มใช้ระเบียนเดียวกัน แต่ละเล่มมีเลขทะเบียนของตัวเอง')}</div></div>` : ''}
-          <div class="row wrap" style="justify-content:flex-end;margin-top:18px"><button class="btn ghost" data-back>ย้อนกลับ</button><button class="btn" data-no>ไม่ใช่ กรอกข้อมูลเอง</button><button class="btn primary" data-yes data-autofocus>ใช่ เล่มนี้</button></div>`;
-        $('[data-yes]', W).addEventListener('click', () => { K.step = 3; draw(); });
-        $('[data-no]', W).addEventListener('click', () => { K.manual = true; K.form = { isbn: r.isbn }; draw(); });
+          <div class="found" style="margin-top:14px">${cover(r, { eager: true })}<div>${prov}<h3 style="font-family:var(--read);font-size:1.1rem;margin:4px 0 8px">${esc(r.t)}</h3><dl class="kv">${kv}</dl></div></div>
+          ${miss.length ? `<div class="msg warn" role="status"><div><b>ระเบียนนี้ยังไม่ครบ</b> ขาด${miss.map(k => MISS_LABEL[k]).join(' ')} ซึ่งแหล่งภายนอกมักไม่มี เพราะเป็นข้อมูลที่ขึ้นกับบริบทของโรงเรียนไทย กดปุ่มด้านล่างเพื่อเติมให้ครบ ระบบจะแนะนำเลขหมู่จากชื่อเรื่องให้</div></div>` : ''}
+          ${K.dup ? `<div class="msg warn" role="status"><div><b>ห้องสมุดมีเล่มนี้แล้ว ${K.dup.length} เล่ม</b> (เลขทะเบียน ${K.dup.map(d => d.bc).join(', ')} สถานะ ${STATUS[K.dup[0].s]}) ถ้าเป็นเล่มที่ได้มาเพิ่ม กดปุ่มยืนยันเพื่อเพิ่มเป็นอีกเล่ม (copy) ${info('หนังสือเรื่องเดียวกันหลายเล่มใช้ระเบียนเดียวกัน แต่ละเล่มมีเลขทะเบียนของตัวเอง')}</div></div>` : ''}
+          <div class="row wrap" style="justify-content:flex-end;margin-top:18px"><button class="btn ghost" data-back>ย้อนกลับ</button><button class="btn" data-no>ไม่ใช่ กรอกข้อมูลเอง</button>
+          ${miss.length ? '<button class="btn primary" data-fill data-autofocus>เติมข้อมูลที่ขาด</button>' : '<button class="btn primary" data-yes data-autofocus>ใช่ เล่มนี้</button>'}</div>`;
+        const toManual = keep => { K.manual = true; K.form = keep ? { isbn: r.isbn, t: r.t, a: r.a, p: r.p, y: r.y, lang: r.lang, type: r.type, subj: r.subj } : { isbn: r.isbn }; draw(); };
+        $('[data-yes]', W)?.addEventListener('click', () => { K.step = 3; draw(); });
+        $('[data-fill]', W)?.addEventListener('click', () => toManual(true));
+        $('[data-no]', W).addEventListener('click', () => toManual(false));
         $('[data-back]', W).addEventListener('click', reset);
-        $('[data-yes]', W).focus();
+        $('[data-autofocus]', W)?.focus();
       }
       function drawManual() {
         const F = K.form;
@@ -347,7 +389,7 @@ function tCatalog() {
           <div class="row" style="justify-content:flex-end;margin-top:18px"><button class="btn ghost" data-back>ย้อนกลับ</button><button class="btn primary" data-next>ถัดไป</button></div>`;
         const fm = $('[data-fm]', W), sug = $('#sug', W);
         const drawSug = () => {
-          const list = suggestDDC(fm.t.value + ' ' + fm.subj.value);
+          const list = suggestDDC(fm.elements.t.value + ' ' + fm.elements.subj.value);
           const cur = F.ddc;
           sug.innerHTML = (list.length ? list.map((s, i) => `<label><input type="radio" name="ddc" value="${s.ddc}" ${cur ? cur === s.ddc ? 'checked' : '' : i === 0 ? 'checked' : ''}><b>${s.ddc}</b><span>${esc(s.name)}<br><span class="small muted">${esc(s.why)}</span></span></label>`).join('') : `<p class="small muted">พิมพ์ชื่อเรื่องหรือคำสำคัญ ระบบจะแนะนำเลขหมู่ 2–3 ตัวเลือกพร้อมเหตุผล</p>`)
             + `<label><input type="radio" name="ddc" value="own" ${cur === 'own' ? 'checked' : ''}><b>อื่น ๆ</b><span>ใส่เลขหมู่เอง <input class="input" name="ddcOwn" value="${esc(F.ddcOwn || '')}" style="margin-top:6px;max-width:200px" inputmode="decimal" aria-label="เลขหมู่ที่ใส่เอง"></span></label>`;
@@ -357,12 +399,19 @@ function tCatalog() {
         $('[data-back]', W).addEventListener('click', reset);
         $('[data-next]', W).addEventListener('click', () => {
           const d = Object.fromEntries(new FormData(fm)); Object.assign(F, d);
-          if (!d.t.trim()) { K.msg = { k: 'err', h: 'กรอกชื่อเรื่องก่อน' }; drawManual(); fm.t?.focus(); return; }
+          if (!d.t.trim()) { K.msg = { k: 'err', h: 'กรอกชื่อเรื่องก่อน' }; drawManual(); fm.elements.t?.focus(); return; }
           let ddc = d.ddc === 'own' ? (d.ddcOwn || '').trim() : d.ddc;
           if (!ddc || !/^\d{3}(\.\d+)?$/.test(ddc)) { K.msg = { k: 'err', h: 'เลือกเลขหมู่ที่แนะนำ หรือใส่เลขหมู่เป็นตัวเลข 3 หลัก เช่น 510 หรือ 895.913' }; drawManual(); return; }
           K.rec = { isbn: d.isbn, t: d.t.trim(), a: d.a, p: d.p, y: d.y, pg: '', lang: d.lang, type: d.type, ddc, cls: DDC_CLASS[ddc[0]], subj: d.subj, lvl: 'ม.1-6', cv: '' };
           K.msg = null; K.step = 3; draw();
         });
+      }
+      function contribute(b) {
+        if (!['ext', 'manual'].includes(K.tier)) return false;
+        if (b.isbn && UNION.some(u => u.isbn === b.isbn)) return false;
+        UNION.push({ isbn: b.isbn, t: b.t, ed: b.ed || '', a: b.a, p: b.p, y: b.y, pg: b.pg || '', lang: b.lang, type: b.type, cls: b.cls, ddc: b.ddc, subj: b.subj || '', lvl: b.lvl || 'ม.1-6', cv: b.cv || '', src: 'ปันอ่าน: ' + SCHOOL.name, used: 1 });
+        S.audit.unshift({ t: now(), who: ME().name, what: `ส่งระเบียน "${shortTitle(b.t)}" เข้าฐานกลางปันอ่าน` });
+        return true;
       }
       function draw3() {
         const r = K.rec, bc = nextBarcode(), call = callNo(r.ddc, r.a, r.t), loc = locFor(r.type, r.lang);
@@ -386,9 +435,10 @@ function tCatalog() {
           const d = collect(); if (!d) return;
           const b = bookFromRecord(r, d); S.labelQueue.push(b.bc);
           S.audit.unshift({ t: now(), who: ME().name, what: `ลงรายการ "${shortTitle(b.t)}" เลขทะเบียน ${b.bc}` });
+          const shared = contribute(b);
           const sec = Math.round((Date.now() - (K.t0 || Date.now())) / 1000);
-          if (after === 'next') { toast(`บันทึกแล้ว ${shortTitle(b.t)} เลขทะเบียน ${b.bc} ลงเล่มต่อไปได้เลย`); reset(); return; }
-          K.saved = { bc: b.bc, sec }; draw();
+          if (after === 'next') { toast(`บันทึกแล้ว ${shortTitle(b.t)} เลขทะเบียน ${b.bc}${shared ? ' และส่งระเบียนเข้าฐานกลางแล้ว' : ''} ลงเล่มต่อไปได้เลย`); reset(); return; }
+          K.saved = { bc: b.bc, sec, shared }; draw();
         };
         $('[data-next]', W)?.addEventListener('click', () => save('next'));
         $('[data-print]', W)?.addEventListener('click', () => save('print'));
@@ -406,6 +456,7 @@ function tCatalog() {
           const b = BY[s.bc];
           W.innerHTML = `<div class="msg ok saved" role="status"><div><b>บันทึกแล้ว</b>&nbsp;${esc(shortTitle(b.t))} เลขทะเบียน ${b.bc}${s.sec > 5 ? ` ใช้เวลา ${Math.floor(s.sec / 60)} นาที ${s.sec % 60} วินาที` : ''}</div></div>
             <div class="lbl-cell" style="max-width:360px;margin-top:18px;border-style:solid">${spine(b.call, 'sm')}<div>${barcode(b.bc)}<div class="bc">${b.bc}</div><div class="bt">${esc(shortTitle(b.t))}</div></div></div>
+            ${s.shared ? '<div class="msg ok" role="status" style="margin-top:14px"><div><b>ส่งระเบียนเข้าฐานกลางปันอ่านแล้ว</b> โรงเรียนอื่นที่ซื้อหนังสือเล่มเดียวกันจะสแกน ISBN แล้วได้ระเบียนนี้ทันที ไม่ต้องลงใหม่</div></div>' : ''}
             <p class="small muted" style="margin-top:10px">ป้ายรอพิมพ์ ${S.labelQueue.length} ดวง พิมพ์ทีเดียวทั้งแผ่นได้ เพื่อประหยัดกระดาษสติกเกอร์</p>
             <div class="row wrap" style="margin-top:16px"><a class="btn primary" href="#/t/labels?mode=queue">พิมพ์ป้าย</a><button class="btn" data-again>ลงเล่มต่อไป</button><a class="btn ghost" href="#/s/book/${b.bc}">ดูหน้าที่นักเรียนเห็น</a></div>`;
         }

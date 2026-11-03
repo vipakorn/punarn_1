@@ -37,6 +37,16 @@ function dueText(due) {
   return { txt: `คืนภายใน ${thShort(due)} อีก ${n} วัน`, late: false, soon: n <= 2 };
 }
 
+/* ---------- fiscal year (ปีงบประมาณ: 1 ต.ค. – 30 ก.ย. ชื่อปีตามปีที่สิ้นสุด) ---------- */
+const FY_LIST = [2566, 2567, 2568, 2569];
+const fyOf = d => d.getFullYear() + 543 + (d.getMonth() >= 9 ? 1 : 0);
+const FY_Q = [2, 2, 2, 3, 3, 3, 4, 4, 4, 1, 1, 1];
+const qOf = d => FY_Q[d.getMonth()];
+const qMonths = q => [[9, 10, 11], [0, 1, 2], [3, 4, 5], [6, 7, 8]][q - 1];
+const qRange = q => ['ต.ค.–ธ.ค.', 'ม.ค.–มี.ค.', 'เม.ย.–มิ.ย.', 'ก.ค.–ก.ย.'][q - 1];
+const FY_NOW = fyOf(TODAY);
+const baht = n => fmt(Math.round(n)) + ' บาท';
+
 /* ---------- school ---------- */
 const SCHOOL = { name: 'โรงเรียนปันอ่านวิทยา', short: 'ปว', students: 812 };
 
@@ -49,6 +59,28 @@ const TYPE_GROUP = {
 const TYPE_LABEL = { text: 'หนังสือเรียนและคู่มือ', exam: 'หนังสือเตรียมสอบ', lit: 'วรรณกรรมและนวนิยาย', nf: 'สารคดีและความรู้ทั่วไป', comic: 'การ์ตูนความรู้', ref: 'หนังสืออ้างอิง' };
 const STATUS = { on: 'อยู่บนชั้น', out: 'ถูกยืม', ref: 'อ่านในห้องสมุดเท่านั้น', repair: 'ส่งซ่อม', lost: 'สูญหาย', gone: 'จำหน่ายออก' };
 const norm = s => String(s || '').toLowerCase().normalize('NFC');
+/* --- ข้อมูลการจัดหาจำลอง (FR-M2-03: แหล่งที่มา ราคา) --- */
+const ACQ_PRICE = { text: [120, 260], exam: [180, 360], lit: [150, 330], nf: [200, 480], comic: [120, 210], ref: [420, 1200] };
+const FUNDS = [['เงินอุดหนุนรายหัว', 0.40], ['เงินรายได้สถานศึกษา', 0.22], ['โครงการเรียนฟรี 15 ปี', 0.20], ['รับบริจาค', 0.18]];
+const wpick = (x, ws) => { let v = x * ws.reduce((a, b) => a + b, 0); for (let i = 0; i < ws.length; i++) { v -= ws[i]; if (v <= 0) return i; } return ws.length - 1; };
+function genAcq(b) {
+  const r = mulberry32(hash(b.bc + 'acq'));
+  const [lo, hi] = ACQ_PRICE[b.g] || ACQ_PRICE.nf;
+  let p = lo + r() * (hi - lo); if (b.lang === 'อังกฤษ') p *= 2.2;
+  b.price = Math.round(p / 5) * 5;
+  const pool = FY_LIST.filter(fy => fy - 543 >= b.yce);
+  const list = pool.length ? pool : [FY_LIST[FY_LIST.length - 1]];
+  const fy = list[wpick(r(), list.map((_, i) => 1 + i * 0.4))];
+  const qi = 1 + wpick(r(), [0.42, 0.28, 0.18, 0.12]);
+  const mo = qMonths(qi)[Math.floor(r() * 3)];
+  let d = new Date(fy - (qi === 1 ? 544 : 543), mo, 1 + Math.floor(r() * 28));
+  if (d.getFullYear() < b.yce) d = new Date(b.yce, Math.floor(r() * 12), 1 + Math.floor(r() * 28));
+  if (d > TODAY) d = new Date(2026, 8, 1 + Math.floor(r() * 13));
+  b.acq = d; b.fy = fyOf(d); b.fq = qOf(d);
+  b.fund = FUNDS[wpick(r(), FUNDS.map(f => f[1]))][0];
+  b.donated = b.fund === 'รับบริจาค';
+  b.spend = b.donated ? 0 : b.price;
+}
 function prepBook(b) {
   b.s = b.s || (b.st === 'ถูกยืม' ? 'out' : String(b.st).startsWith('อ่าน') ? 'ref' : 'on');
   b.yce = +b.y > 2400 ? +b.y - 543 : +b.y;
@@ -58,6 +90,7 @@ function prepBook(b) {
   const h = hash(b.bc) % 40;
   b.pop = h + (b.g === 'exam' ? 26 : b.g === 'comic' ? 22 : b.type === 'วรรณกรรมแปล' ? 16 : b.g === 'lit' ? 8 : 0);
   b._idx = norm([b.t, b.a, b.p, b.subj, b.isbn, b.call, b.sub, b.exam.join(' '), b.type, b.bc, b.ed, b.note].join(' '));
+  if (!b.acq) genAcq(b);
   return b;
 }
 BOOKS.forEach(prepBook);
@@ -115,7 +148,7 @@ const S = {
 };
 (function genActivity() {
   const out = BOOKS.filter(b => b.s === 'out').map(b => b.bc);
-  const mine = { '1000085': [8, 15], '1000184': [12, 19] };
+  const mine = { '1000085': [8, 15], '1000184': [12, 19], '1000031': [1, 8] };
   const others = STUDENTS.filter(s => s.id !== '41208' && s.id !== '40115');
   const overdueAgo = [3, 4, 6, 10, 11, 17];
   let oi = 0, ti = 0;
@@ -164,6 +197,12 @@ BY['1000093'] && (BY['1000093'].s = 'repair');
 const loanOf = bc => S.loans.find(l => l.bc === bc);
 const loansOf = sid => S.loans.filter(l => l.sid === sid);
 const overdue = () => S.loans.filter(l => diffDays(l.due, TODAY) < 0).sort((a, b) => a.due - b.due);
+/* ค่าปรับ: วันละ 1 บาทต่อเล่ม นับทุกวันรวมวันหยุด */
+const FINE_RATE = 1;
+const lateDays = l => Math.max(0, -diffDays(l.due, TODAY));
+const fineOf = l => lateDays(l) * FINE_RATE;
+const overdueOf = sid => loansOf(sid).filter(l => lateDays(l) > 0).sort((a, b) => a.due - b.due);
+const fineTotal = sid => overdueOf(sid).reduce((a, l) => a + fineOf(l), 0);
 const todayVisits = () => S.visits.filter(v => diffDays(v.t, TODAY) === 0);
 const todayLog = type => S.log.filter(x => x.type === type && diffDays(x.t, TODAY) === 0);
 
@@ -173,6 +212,13 @@ const UNION = [
   { isbn: '9780761169253', t: 'Steal Like an Artist : 10 things nobody told you about being creative', ed: '', a: 'Austin Kleon', p: 'Workman Publishing', y: '2012', pg: '160', lang: 'อังกฤษ', type: 'สารคดี/ความรู้ทั่วไป', cls: '100 ปรัชญาและจิตวิทยา', ddc: '153.35', subj: 'Creative ability; Creation (Literary, artistic, etc.)', lvl: 'ม.4-6', cv: 'o|7284187', src: 'o:OL16489931W', used: 4 },
   { isbn: '9781861976772', t: 'Eats, Shoots & Leaves : the zero tolerance approach to punctuation', ed: '', a: 'Lynne Truss', p: 'Profile Books', y: '2005', pg: '209', lang: 'อังกฤษ', type: 'สารคดี/ความรู้ทั่วไป', cls: '400 ภาษาศาสตร์', ddc: '428.2', subj: 'English language -- Punctuation', lvl: 'ม.4-6', cv: 'o|8567974', src: 'o:OL2793678W', used: 2 }
 ];
+
+/* แหล่งภายนอก (จำลอง) ระเบียนไม่ครบตามสภาพจริง ไม่มีเลขหมู่ หัวเรื่องไทย หรือระดับชั้น */
+const EXT = [
+  { isbn: '9780140328721', t: 'Fantastic Mr Fox', ed: '', a: 'Roald Dahl', p: 'Puffin Books', y: '1996', pg: '96', lang: 'อังกฤษ', type: '', cls: '', ddc: '823.914', subj: '', lvl: '', cv: 'o|8231445', from: 'Open Library', srcid: 'OL24347578M' },
+  { isbn: '9786160843695', t: 'สรุปเข้ม คณิตศาสตร์ ม.ปลาย ฉบับสมบูรณ์', ed: '', a: 'ธนพล ศรีสมบูรณ์', p: 'ธิงค์ บียอนด์ บุ๊คส์', y: '2566', pg: '', lang: 'ไทย', type: '', cls: '', ddc: '', subj: '', lvl: '', cv: '', from: 'Google Books', srcid: 'tB9xEAAAQBAJ' }
+];
+const TIER_SRC = { own: 'คลังของโรงเรียนนี้', union: 'ฐานกลางปันอ่าน', ext: 'แหล่งภายนอก', manual: 'ครูกรอกเอง' };
 
 /* ---------- Thai cataloguing helpers ---------- */
 const THAI_CONS = 'กขฃคฅฆงจฉชซฌญฎฏฐฑฒณดตถทธนบปผฝพฟภมยรฤลฦวศษสหฬอฮ';
@@ -227,6 +273,7 @@ const ICON = {
   help: P('<circle cx="12" cy="12" r="9"/><path d="M9.6 9.4a2.5 2.5 0 1 1 3.4 2.4c-.6.3-1 .9-1 1.6v.4M12 17.2v.1"/>'),
   kiosk: P('<rect x="5" y="2.5" width="14" height="19" rx="2"/><path d="M10 18.5h4"/>'),
   chat: P('<path d="M4 5h16v11H9l-5 4z"/>'),
+  late: P('<circle cx="12" cy="12" r="9"/><path d="M12 7.5v5l3 2"/>'),
   camera: P('<path d="M3 8h4l2-3h6l2 3h4v11H3z"/><circle cx="12" cy="13" r="3.5"/>'),
   check: P('<path d="m5 12.5 4.5 4.5L19 7.5"/>'),
   x: P('<path d="M6 6l12 12M18 6 6 18"/>'),
@@ -300,7 +347,7 @@ function render(keepFocus) {
   if (parts[0] === 's') v = viewStudent(parts.slice(1), q);
   else if (parts[0] === 'k') v = viewKiosk(q);
   else if (parts[0] === 't' || parts[0] === 'a') { S.role = parts[0] === 'a' ? 'assistant' : 'teacher'; v = viewTeacher(parts.slice(1), q); }
-  else if (parts[0] === 'e') v = viewExec(q);
+  else if (parts[0] === 'e') v = parts[1] === 'budget' ? viewExecBudget(q) : viewExec(q);
   else v = viewLaunch();
   document.body.dataset.view = parts[0] || 'home';
   app.innerHTML = v.html;

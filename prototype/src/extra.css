@@ -84,3 +84,37 @@
 @media (max-width:620px){.pb-long{display:none}.pb-short{display:inline}}
 .tbl{position:relative}
 @media print{.report h2{break-after:avoid}.report .tbl tr,.rep-figs,.report .chart{break-inside:avoid}.report header{break-inside:avoid}}
+
+/* tabs in the executive view (links inside .seg) */
+.seg a{flex:1;display:flex;align-items:center;justify-content:center;min-height:38px;border-radius:9px;font:500 .86rem var(--ui);color:var(--ink-2);text-decoration:none;white-space:nowrap;padding:0 14px}
+.seg a[aria-current="page"]{background:var(--white);color:var(--ink);box-shadow:0 1px 2px rgba(22,48,46,.15)}
+
+/* student bottom nav: 5 items + overdue badge */
+.s-nav{grid-template-columns:repeat(5,1fr)}
+.s-nav a .ico{position:relative;display:block;line-height:0}
+.s-nav a .badge{position:absolute;top:-4px;left:14px;min-width:16px;height:16px;padding:0 4px;border-radius:9px;background:var(--red,#B3261E);color:#fff;font:600 .66rem/16px var(--ui);text-align:center;font-style:normal}
+.fine-box{padding:16px;border-radius:14px;background:#FDECEA;border:1px solid #F3C9C4;color:#7A2016}
+.fine-box .fine-num{font:600 2rem/1.2 var(--ui);margin:4px 0}
+
+/* Dublin Core record dialog */
+.dc-link{font:500 .95rem/1.4 var(--ui);text-align:left;padding:0;color:var(--teal);background:none;border:0;cursor:pointer;text-decoration:underline;text-underline-offset:2px}
+.dc-link:hover{color:var(--ink)}
+.dc-tbl td{vertical-align:top}
+.dc-tbl code{font:500 .82rem var(--mono,ui-monospace,monospace);color:var(--ink)}
+.dc-tbl .dc-empty td{opacity:.6}
+.dc-xml{max-height:46vh;overflow:auto;padding:12px;border-radius:10px;background:var(--paper);border:1px solid var(--line);font:400 .78rem/1.6 var(--mono,ui-monospace,monospace);white-space:pre;color:var(--ink)}
+
+/* cataloguing: four-tier source cascade */
+.srcbox{margin-top:16px}
+.srcs{list-style:none;margin:0;padding:0;counter-reset:src}
+.srcs li{display:flex;align-items:center;gap:12px;padding:8px 0;border-bottom:1px solid var(--line);font:400 .88rem var(--ui)}
+.srcs li:last-child{border-bottom:0}
+.srcs li span:first-child{flex:1;counter-increment:src}
+.srcs li span:first-child::before{content:counter(src) ". ";color:var(--ink-2)}
+.srcs .st{font:500 .8rem var(--ui);color:var(--ink-2);white-space:nowrap}
+.srcs .st.busy{color:var(--teal)}
+.srcs .st.ok{color:var(--ok,#1E7A45);font-weight:600}
+.srcs .st.warn{color:#8A5A00}
+.prov{font-weight:500}
+.prov.own,.prov.union{color:var(--teal)}
+.prov.ext{color:#8A5A00}

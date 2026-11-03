@@ -4,7 +4,7 @@
 function tItems() {
   const F = S.itemsF || (S.itemsF = { q: '', st: '', g: '', loc: '', n: 30 });
   return {
-    title: 'ทรัพยากรทั้งหมด',
+    title: 'ทรัพยากรสารสนเทศ',
     actions: `<button class="btn" data-import>${ICON.import}นำเข้าจาก CSV หรือ Excel</button><button class="btn" data-exp>${ICON.export}ส่งออก CSV</button>`,
     body: `<form class="frow" data-if aria-label="ค้นหาและกรอง">
         <label class="field grow" style="min-width:240px"><span>ค้นหา</span><input class="input" id="iq" name="q" value="${esc(F.q)}" placeholder="ชื่อเรื่อง ผู้แต่ง เลขทะเบียน หรือ ISBN" autocomplete="off"></label>
@@ -21,11 +21,12 @@ function tItems() {
         if (F.g) list = list.filter(b => b.g === F.g); if (F.loc) list = list.filter(b => b.loc === F.loc);
         list.sort((a, b) => b.bc - a.bc);
         const opt = b => b.s === 'out' ? statusPill(b) : `<label class="sr" for="st-${b.bc}">สถานะของ ${esc(shortTitle(b.t))}</label><select class="input" id="st-${b.bc}" data-st="${b.bc}" style="min-height:36px;padding:4px 8px;width:auto">${Object.entries(STATUS).filter(([k]) => k !== 'out').map(([k, v]) => `<option value="${k}" ${b.s === k ? 'selected' : ''}>${v}</option>`).join('')}</select>`;
-        box.innerHTML = `<p class="small muted" style="padding:8px 0">แสดง ${Math.min(F.n, list.length)} จาก ${list.length} รายการ (ทั้งห้องสมุด ${BOOKS.length} เล่ม)</p>
+        box.innerHTML = `<p class="small muted" style="padding:8px 0">แสดง ${Math.min(F.n, list.length)} จาก ${list.length} รายการ (ทั้งห้องสมุด ${BOOKS.length} เล่ม) · กดชื่อเรื่องเพื่อดูโครงสร้างข้อมูล Dublin Core</p>
           <table class="tbl"><thead><tr><th></th><th>ชื่อเรื่อง</th><th>เลขเรียกหนังสือ</th><th>เลขทะเบียน</th><th>มุมจัดเก็บ</th><th>สถานะ</th></tr></thead><tbody>
-          ${list.slice(0, F.n).map(b => `<tr><td>${cover(b)}</td><td><div class="t">${esc(shortTitle(b.t))}</div><div class="small muted">${esc(b.a)}</div></td><td class="num">${esc(b.call)}</td><td class="num">${b.bc}</td><td class="small">${esc(b.loc)}</td><td>${opt(b)}</td></tr>`).join('')}</tbody></table>
+          ${list.slice(0, F.n).map(b => `<tr><td>${cover(b)}</td><td><button type="button" class="linkbtn dc-link" data-dc="${b.bc}">${esc(shortTitle(b.t))}</button><div class="small muted">${esc(b.a)}</div></td><td class="num">${esc(b.call)}</td><td class="num">${b.bc}</td><td class="small">${esc(b.loc)}</td><td>${opt(b)}</td></tr>`).join('')}</tbody></table>
           ${list.length > F.n ? `<p style="padding:12px 0"><button class="btn sm" data-more>แสดงเพิ่มอีก 30 รายการ</button></p>` : ''}`;
         $('[data-more]', box)?.addEventListener('click', () => { F.n += 30; draw(); });
+        $$('[data-dc]', box).forEach(a => a.addEventListener('click', () => dcDialog(a.dataset.dc)));
         $$('[data-st]', box).forEach(s => s.addEventListener('change', () => {
           const b = BY[s.dataset.st], v = s.value;
           const apply = reason => { b.s = v; S.audit.unshift({ t: now(), who: ME().name, what: `เปลี่ยนสถานะ ${b.bc} เป็น ${STATUS[v]}${reason ? ` (${reason})` : ''}` }); toast(`เปลี่ยนสถานะ ${shortTitle(b.t)} เป็น "${STATUS[v]}" แล้ว`); };
@@ -34,7 +35,7 @@ function tItems() {
               <form data-gone style="margin-top:14px" class="stack"><label class="field"><span>เหตุผล</span><select class="input" name="r"><option>ชำรุดจนซ่อมไม่ได้</option><option>เนื้อหาล้าสมัย</option><option>สูญหายเกิน 1 ภาคเรียน</option><option>อื่น ๆ</option></select></label>
               <label class="field"><span>วันที่จำหน่าย</span><input class="input" name="d" value="${thDate(TODAY)}"></label>
               <div class="acts"><button type="button" class="btn" data-close>ยกเลิก</button><button class="btn primary">จำหน่ายออก</button></div></form>`, d => {
-              $('[data-gone]', d).addEventListener('submit', e => { e.preventDefault(); apply(e.target.r.value); closeDialog(); draw(); });
+              $('[data-gone]', d).addEventListener('submit', e => { e.preventDefault(); apply(e.target.elements.r.value); closeDialog(); draw(); });
               $('[data-close]', d).addEventListener('click', () => { s.value = b.s; });
             });
           } else apply();
@@ -240,13 +241,13 @@ function tUsers() {
         <label class="row small"><input type="checkbox" name="keep" checked> ให้ฉันยังเป็นครูผู้รับผิดชอบห้องสมุดต่อ</label>
         <p class="small muted">ผู้รับจะได้อีเมลยืนยัน สิทธิ์จะโอนเมื่อผู้รับกดยืนยัน</p>
         <div class="acts"><button type="button" class="btn" data-close>ยกเลิก</button><button class="btn primary">ส่งคำขอโอนสิทธิ์</button></div></form>`, d => {
-        $('[data-tr]', d).addEventListener('submit', e => { e.preventDefault(); const to = e.target.to.value; closeDialog(); S.audit.unshift({ t: now(), who: 'ครูวิไลวรรณ ทองคำ', what: `ส่งคำขอโอนสิทธิ์ผู้ดูแลให้ ${to}` }); toast(`ส่งคำขอโอนสิทธิ์ให้ ${to} แล้ว รอการยืนยัน`); refresh(); });
+        $('[data-tr]', d).addEventListener('submit', e => { e.preventDefault(); const to = e.target.elements.to.value; closeDialog(); S.audit.unshift({ t: now(), who: 'ครูวิไลวรรณ ทองคำ', what: `ส่งคำขอโอนสิทธิ์ผู้ดูแลให้ ${to}` }); toast(`ส่งคำขอโอนสิทธิ์ให้ ${to} แล้ว รอการยืนยัน`); refresh(); });
       }));
       $('[data-add]').addEventListener('click', () => openDialog(`<h2 id="dlg-h">เพิ่มยุวบรรณารักษ์</h2><form data-ad class="stack" style="margin-top:10px"><label class="field"><span>รหัสประจำตัวนักเรียน</span><input class="input" name="id" inputmode="numeric" maxlength="5" data-autofocus></label><div id="ad-who" class="small" aria-live="polite"></div>
         <div class="acts"><button type="button" class="btn" data-close>ยกเลิก</button><button class="btn primary">ให้สิทธิ์ยุวบรรณารักษ์</button></div></form>`, d => {
         const f = $('[data-ad]', d);
-        f.id.addEventListener('input', () => { const s = SBY[f.id.value]; $('#ad-who', d).textContent = s ? `${fullName(s)} ${cls(s)}` : f.id.value.length === 5 ? 'ไม่พบรหัสนี้' : ''; });
-        f.addEventListener('submit', e => { e.preventDefault(); const s = SBY[f.id.value]; if (!s) { $('#ad-who', d).textContent = 'ไม่พบรหัสนี้ ตรวจรหัส 5 หลักอีกครั้ง'; return; } if (!ASSIST_IDS.includes(s.id)) ASSIST_IDS.push(s.id); closeDialog(); toast(`ให้สิทธิ์ยุวบรรณารักษ์แก่ ${s.first} แล้ว`); refresh(); });
+        f.elements.id.addEventListener('input', () => { const v = f.elements.id.value; const s = SBY[v]; $('#ad-who', d).textContent = s ? `${fullName(s)} ${cls(s)}` : v.length === 5 ? 'ไม่พบรหัสนี้' : ''; });
+        f.addEventListener('submit', e => { e.preventDefault(); const s = SBY[f.elements.id.value]; if (!s) { $('#ad-who', d).textContent = 'ไม่พบรหัสนี้ ตรวจรหัส 5 หลักอีกครั้ง'; return; } if (!ASSIST_IDS.includes(s.id)) ASSIST_IDS.push(s.id); closeDialog(); toast(`ให้สิทธิ์ยุวบรรณารักษ์แก่ ${s.first} แล้ว`); refresh(); });
       }));
       $$('[data-rm]').forEach(b => b.addEventListener('click', () => { const i = ASSIST_IDS.indexOf(b.dataset.rm); ASSIST_IDS.splice(i, 1); toast('ยกเลิกสิทธิ์แล้ว'); refresh(); }));
     }
@@ -300,7 +301,7 @@ function marcxml() {
 function tExport() {
   const ymd = `${TODAY.getFullYear() + 543}${String(TODAY.getMonth() + 1).padStart(2, '0')}${String(TODAY.getDate()).padStart(2, '0')}`;
   const items = [
-    ['items', 'ทรัพยากรทั้งหมด', `${BOOKS.length} รายการ`, 'CSV'],
+    ['items', 'ทรัพยากรสารสนเทศ', `${BOOKS.length} รายการ`, 'CSV'],
     ['marc', 'ระเบียนบรรณานุกรม', `${BOOKS.length} ระเบียน ใช้ย้ายไประบบห้องสมุดอื่นได้`, 'MARCXML'],
     ['students', 'รายชื่อนักเรียน', `${fmt(STUDENTS.length)} คน`, 'CSV'],
     ['loans', 'การยืมที่ยังไม่คืน', `${S.loans.length} รายการ`, 'CSV'],
@@ -350,7 +351,7 @@ function feedbackDialog() {
     <form data-fb class="stack" style="margin-top:14px"><label class="field"><span>เรื่อง</span><select class="input" name="k"><option>ใช้งานไม่ได้หรือผิดพลาด</option><option>ไม่เข้าใจวิธีใช้</option><option>อยากให้เพิ่มความสามารถ</option><option>อื่น ๆ</option></select></label>
     <label class="field"><span>รายละเอียด</span><textarea class="input" name="t" required data-autofocus placeholder="เกิดอะไรขึ้น หรืออยากให้ปรับอะไร"></textarea></label>
     <div class="acts"><button type="button" class="btn" data-close>ยกเลิก</button><button class="btn primary">ส่งข้อความ</button></div></form>`, d => {
-    $('[data-fb]', d).addEventListener('submit', e => { e.preventDefault(); if (!e.target.t.value.trim()) return e.target.t.focus(); closeDialog(); toast('ส่งข้อความถึงทีมพัฒนาแล้ว จะตอบกลับทางอีเมลภายใน 3 วันทำการ'); });
+    $('[data-fb]', d).addEventListener('submit', e => { e.preventDefault(); if (!e.target.elements.t.value.trim()) return e.target.t.focus(); closeDialog(); toast('ส่งข้อความถึงทีมพัฒนาแล้ว จะตอบกลับทางอีเมลภายใน 3 วันทำการ'); });
   });
 }
 function surveyDialog() {
@@ -361,4 +362,142 @@ function surveyDialog() {
     <div class="acts"><button type="button" class="btn" data-close>ทำภายหลัง</button><button class="btn primary">ส่งแบบประเมิน</button></div></form>`, d => {
     $('[data-sv]', d).addEventListener('submit', e => { e.preventDefault(); closeDialog(); toast('ส่งแบบประเมินแล้ว ขอบคุณที่ช่วยพัฒนาระบบ'); });
   });
+}
+
+/* ---------- Dublin Core metadata record (DCMES 1.1 / ISO 15836) ---------- */
+const DC_LANG = { 'ไทย': 'tha', 'อังกฤษ': 'eng', 'จีน': 'zho', 'ญี่ปุ่น': 'jpn' };
+const DC_TYPE = b => b.g === 'comic' ? 'Image, Text' : 'Text';
+/* [องค์ประกอบ, คำอธิบายภาษาไทย, ค่า (array = ซ้ำได้), ช่องที่มาในระบบ] */
+function dcRecord(b) {
+  const subj = String(b.subj || '').split(';').map(s => s.trim()).filter(Boolean);
+  return [
+    ['title', 'ชื่อเรื่อง', [b.t], 'ชื่อเรื่อง'],
+    ['creator', 'ผู้รับผิดชอบหลัก', String(b.a || '').split(/ และ |;| & /).map(s => s.trim()).filter(Boolean), 'ผู้แต่ง'],
+    ['subject', 'หัวเรื่องและเลขหมู่', [...subj, b.ddc ? `${b.ddc} (DDC)` : ''].filter(Boolean), 'หัวเรื่อง, เลขหมู่ DDC'],
+    ['description', 'คำอธิบาย', [b.note || b.sub || ''].filter(Boolean), 'หมายเหตุ (ยังไม่ได้เก็บ)'],
+    ['publisher', 'สำนักพิมพ์', [b.p].filter(Boolean), 'สำนักพิมพ์'],
+    ['contributor', 'ผู้ร่วมสร้างสรรค์', [], 'ยังไม่ได้เก็บแยกจากผู้แต่ง'],
+    ['date', 'ปีที่พิมพ์', [b.y ? `${b.yce} (พ.ศ. ${b.ybe})` : ''].filter(Boolean), 'ปีที่พิมพ์'],
+    ['type', 'ประเภทเนื้อหา (DCMI Type)', [DC_TYPE(b)], 'ประเภททรัพยากร'],
+    ['format', 'รูปแบบกายภาพ', [`print${b.pg ? `; ${b.pg} หน้า` : ''}`], 'จำนวนหน้า'],
+    ['identifier', 'ตัวระบุ', [`เลขทะเบียน ${b.bc}`, b.isbn ? `ISBN ${b.isbn}` : '', b.call ? `เลขเรียก ${b.call}` : ''].filter(Boolean), 'เลขทะเบียน, ISBN, เลขเรียกหนังสือ'],
+    ['source', 'แหล่งที่มาของระเบียน', [b.src ? (String(b.src).startsWith('o:') ? `Open Library ${String(b.src).slice(2)}` : b.src) : 'ลงรายการเอง'], 'แหล่งที่คัดลอกระเบียน'],
+    ['language', 'ภาษา', [`${DC_LANG[b.lang] || 'und'} (${b.lang || 'ไม่ระบุ'})`], 'ภาษา'],
+    ['relation', 'ความสัมพันธ์กับทรัพยากรอื่น', [], 'ยังไม่ได้เก็บ'],
+    ['coverage', 'ขอบเขตด้านเวลาหรือสถานที่', [], 'ยังไม่ได้เก็บ'],
+    ['rights', 'สิทธิ์', [`ลิขสิทธิ์ของ ${b.p || 'ผู้จัดพิมพ์'} ให้บริการยืมภายในห้องสมุดโรงเรียน`], 'ไม่ได้เก็บ ใช้ข้อความมาตรฐาน']
+  ];
+}
+function dcXML(b) {
+  const rows = dcRecord(b).flatMap(([el, , vals]) => vals.map(v => `  <dc:${el}>${esc(v)}</dc:${el}>`));
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<oai_dc:dc xmlns:oai_dc="http://www.openarchives.org/OAI/2.0/oai_dc/"
+           xmlns:dc="http://purl.org/dc/elements/1.1/"
+           xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+           xsi:schemaLocation="http://www.openarchives.org/OAI/2.0/oai_dc/ http://www.openarchives.org/OAI/2.0/oai_dc.xsd">
+${rows.join('\n')}
+</oai_dc:dc>`;
+}
+function dcDialog(bc) {
+  const b = BY[bc]; if (!b) return;
+  const rec = dcRecord(b), filled = rec.filter(r => r[2].length).length;
+  const rows = rec.map(([el, th, vals, from]) => `<tr${vals.length ? '' : ' class="dc-empty"'}>
+      <td><code>dc:${el}</code><div class="small muted">${esc(th)}</div></td>
+      <td>${vals.length ? vals.map(v => `<div>${esc(v)}</div>`).join('') : '<span class="muted">— ไม่มีข้อมูล</span>'}</td>
+      <td class="small muted">${esc(from)}</td></tr>`).join('');
+  openDialog(`<h2 id="dlg-h">โครงสร้างข้อมูล Dublin Core</h2>
+    <p class="muted" style="margin-top:4px">${esc(shortTitle(b.t))} (เลขทะเบียน ${b.bc})</p>
+    <div class="seg noprint" style="max-width:340px;margin:12px 0"><button type="button" data-tab="tbl" aria-pressed="true">ตาราง</button><button type="button" data-tab="xml" aria-pressed="false">XML</button></div>
+    <div data-pane="tbl">
+      <table class="tbl dc-tbl"><thead><tr><th>องค์ประกอบ</th><th>ค่าในระเบียนนี้</th><th>มาจากช่อง</th></tr></thead><tbody>${rows}</tbody></table>
+      <p class="small muted" style="margin-top:10px">กรอกแล้ว ${filled} จาก 15 องค์ประกอบของ Dublin Core Metadata Element Set 1.1 (ISO 15836) องค์ประกอบทุกตัวเป็นทางเลือกและซ้ำได้ตามมาตรฐาน</p>
+    </div>
+    <div data-pane="xml" hidden><pre class="dc-xml" tabindex="0">${esc(dcXML(b))}</pre>
+      <p class="small muted" style="margin-top:10px">รูปแบบ oai_dc ใช้แลกเปลี่ยนระเบียนผ่าน OAI-PMH กับห้องสมุดอื่นหรือฐานข้อมูลสหบรรณานุกรม</p></div>
+    <div class="acts" style="margin-top:14px"><button type="button" class="btn" data-copy>คัดลอก XML</button><button type="button" class="btn" data-dl>ดาวน์โหลด .xml</button><button type="button" class="btn primary" data-close>ปิด</button></div>`, d => {
+    $$('[data-tab]', d).forEach(t => t.addEventListener('click', () => {
+      $$('[data-tab]', d).forEach(x => x.setAttribute('aria-pressed', x === t));
+      $$('[data-pane]', d).forEach(p => p.hidden = p.dataset.pane !== t.dataset.tab);
+    }));
+    $('[data-copy]', d).addEventListener('click', () => {
+      const txt = dcXML(b);
+      (navigator.clipboard ? navigator.clipboard.writeText(txt) : Promise.reject()).then(
+        () => toast('คัดลอก Dublin Core XML แล้ว'),
+        () => toast('คัดลอกไม่สำเร็จ ใช้ปุ่มดาวน์โหลดแทนได้'));
+    });
+    $('[data-dl]', d).addEventListener('click', () => { download(`punarn-dc-${b.bc}.xml`, dcXML(b), 'application/xml'); toast('ดาวน์โหลดระเบียน Dublin Core แล้ว'); });
+  });
+}
+
+/* ---------- นักเรียนที่ใช้บริการมากที่สุด (FR-M9-04, FR-M6-01) ---------- */
+const STU_AFF = {};
+const affOf = k => STU_AFF[k] || (STU_AFF[k] = STUDENTS.map(s => Math.pow(hash(s.id + k) / 4294967296, k === 'loans' ? 6 : 5)));
+function topStudents(months, kind, n = 10) {
+  const aff = affOf(kind), tally = new Array(STUDENTS.length).fill(0);
+  months.forEach(mo => {
+    const w = aff.map((a, i) => a * (0.55 + hash(STUDENTS[i].id + mo.y + '-' + mo.m) / 4294967296 * 0.9));
+    apportion(mo[kind], w).forEach((v, i) => tally[i] += v);
+  });
+  return STUDENTS.map((s, i) => ({ s, v: tally[i] })).filter(x => x.v > 0)
+    .sort((a, b) => b.v - a.v || (a.s.id < b.s.id ? -1 : 1)).slice(0, n);
+}
+const PERIOD_KINDS = [['month', 'รายเดือน'], ['quarter', 'รายไตรมาส'], ['year', 'รายปีงบประมาณ']];
+function periodOpts(by) {
+  if (by === 'year') return [...new Set(MONTHS.map(m => fyOf(new Date(m.y, m.m, 1))))].sort((a, b) => b - a).map(fy => [String(fy), `ปีงบประมาณ ${fy}${fy === FY_NOW ? ' (ถึงวันนี้)' : ''}`]);
+  if (by === 'quarter') {
+    const out = [];
+    MONTHS.forEach(m => { const d = new Date(m.y, m.m, 1), fy = fyOf(d), q = qOf(d), k = `${fy}-${q}`; if (!out.some(o => o[0] === k)) out.push([k, `ไตรมาส ${q} (${qRange(q)}) ปีงบประมาณ ${fy}`]); });
+    return out.reverse();
+  }
+  return MONTHS.map(m => [`${m.y}-${m.m}`, monthLabel(m, true) + (m.partial ? ' (ถึงวันนี้)' : '')]).reverse();
+}
+function periodMonths(by, p) {
+  if (by === 'year') return MONTHS.filter(m => fyOf(new Date(m.y, m.m, 1)) === +p);
+  if (by === 'quarter') { const [fy, q] = p.split('-').map(Number); return MONTHS.filter(m => { const d = new Date(m.y, m.m, 1); return fyOf(d) === fy && qOf(d) === q; }); }
+  const [y, m] = p.split('-').map(Number); return MONTHS.filter(x => x.y === y && x.m === m);
+}
+function tTop(q) {
+  const by = PERIOD_KINDS.some(k => k[0] === q.by) ? q.by : 'month';
+  const opts = periodOpts(by);
+  const p = opts.some(o => o[0] === q.p) ? q.p : opts[0][0];
+  const label = opts.find(o => o[0] === p)[1];
+  const ms = periodMonths(by, p);
+  const tv = topStudents(ms, 'visits'), tl = topStudents(ms, 'loans');
+  const sumV = ms.reduce((a, m) => a + m.visits, 0), sumL = ms.reduce((a, m) => a + m.loans, 0);
+  const rank = (list, unit, total) => list.length ? `<table class="tbl"><thead><tr><th>อันดับ</th><th>นักเรียน</th><th>ชั้น</th><th class="num">${unit}</th><th class="num">ร้อยละของทั้งหมด</th></tr></thead><tbody>${
+    list.map((x, i) => `<tr><td class="num">${i + 1}</td><td>${esc(fullName(x.s))}</td><td class="small">${esc(cls(x.s))}</td><td class="num">${fmt(x.v)}</td><td class="num small">${(x.v / total * 100).toFixed(1)}</td></tr>`).join('')
+    }</tbody></table>` : '<p class="muted">ไม่มีข้อมูลในช่วงนี้</p>';
+  const body = `<form class="frow noprint" data-tf aria-label="เลือกช่วงเวลา">
+      <label class="field"><span>ช่วงเวลา</span><select class="input" name="by">${PERIOD_KINDS.map(([v, t]) => `<option value="${v}" ${by === v ? 'selected' : ''}>${t}</option>`).join('')}</select></label>
+      <label class="field grow" style="min-width:260px"><span>เลือก${by === 'month' ? 'เดือน' : by === 'quarter' ? 'ไตรมาส' : 'ปี'}</span><select class="input" name="p">${opts.map(([v, t]) => `<option value="${v}" ${p === v ? 'selected' : ''}>${t}</option>`).join('')}</select></label>
+    </form>
+    <div class="panel" style="margin-bottom:18px"><p class="small"><b>ข้อมูลรายบุคคล</b> หน้านี้แสดงชื่อนักเรียน ใช้สำหรับมอบรางวัลส่งเสริมการอ่านและติดตามนักเรียนที่ยังไม่ได้ใช้บริการเท่านั้น ไม่ควรประกาศเป็นการจัดอันดับสาธารณะ รายงานสำหรับผู้บริหารแสดงเฉพาะยอดรวม ไม่มีชื่อรายบุคคล</p></div>
+    <article class="report" id="report">
+      <header><div class="row" style="align-items:flex-start">${CREST(44)}<div><h2 style="margin:0;font-size:1.25rem">นักเรียนที่ใช้บริการห้องสมุดมากที่สุด</h2><p class="muted">${esc(SCHOOL.name)} · ${esc(label)}</p></div></div><div class="small muted" style="text-align:right">พิมพ์เมื่อ ${thDate(TODAY)}<br>จากระบบปันอ่าน</div></header>
+      <div class="rep-figs"><div><b class="num">${fmt(sumV)}</b><span>ผู้เข้าใช้รวม (ครั้ง)</span></div><div><b class="num">${fmt(sumL)}</b><span>ยืมรวม (เล่ม)</span></div><div><b class="num">${ms.length}</b><span>เดือนที่นับ</span></div><div><b class="num">${fmt(SCHOOL.students)}</b><span>นักเรียนทั้งหมด (คน)</span></div></div>
+      <h2>เข้าใช้ห้องสมุดบ่อยที่สุด 10 อันดับ</h2>${rank(tv, 'ครั้ง', sumV)}
+      <h2>ยืมหนังสือมากที่สุด 10 อันดับ</h2>${rank(tl, 'เล่ม', sumL)}
+      <p class="small muted" style="margin-top:14px">นับจากการบันทึกเข้าใช้ที่ kiosk และรายการยืมที่เคาน์เตอร์ นักเรียนที่ไม่เคยใช้บริการในช่วงนี้ไม่ปรากฏในตาราง</p>
+      <div class="row sig" style="justify-content:space-around;margin-top:40px;text-align:center"><div>ลงชื่อ ........................................<br>(ครูวิไลวรรณ ทองคำ)<br>ครูผู้รับผิดชอบห้องสมุด</div></div>
+    </article>`;
+  return {
+    title: 'นักเรียนที่ใช้บริการมากที่สุด',
+    actions: `<button class="btn" data-xls>${ICON.export}ดาวน์โหลด Excel</button><button class="btn primary" data-pdf>${ICON.print}ดาวน์โหลด PDF</button>`,
+    body,
+    mount(root) {
+      const f = $('[data-tf]', root);
+      f.addEventListener('change', e => {
+        const d = Object.fromEntries(new FormData(f));
+        if (e.target.name === 'by') delete d.p;
+        history.replaceState(null, '', '#/t/top?' + new URLSearchParams(d)); refresh();
+      });
+      $('[data-pdf]', document).addEventListener('click', () => window.print());
+      $('[data-xls]', document).addEventListener('click', () => {
+        const rows = [['นักเรียนที่ใช้บริการห้องสมุดมากที่สุด'], [SCHOOL.name], [label], [],
+          ['อันดับ', 'นักเรียน', 'ชั้น', 'เข้าใช้ (ครั้ง)'], ...tv.map((x, i) => [i + 1, fullName(x.s), cls(x.s), x.v]), [],
+          ['อันดับ', 'นักเรียน', 'ชั้น', 'ยืม (เล่ม)'], ...tl.map((x, i) => [i + 1, fullName(x.s), cls(x.s), x.v])];
+        download(`นักเรียนใช้บริการมากที่สุด-${p}.csv`, toCSV(rows)); toast('ดาวน์โหลดไฟล์สำหรับ Excel แล้ว');
+      });
+    }
+  };
 }

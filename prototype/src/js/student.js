@@ -15,8 +15,9 @@ function resultRow(b) {
   return `<a class="result" href="#/s/book/${b.bc}">${cover(b)}<div><h3>${esc(b.t)}</h3><div class="meta">${esc(b.a)} พ.ศ. ${b.ybe}</div>${statusPill(b, true)}</div>${spine(b.call, 'sm')}</a>`;
 }
 function sNav(tab) {
-  const it = (k, href, ico, label) => `<a href="${href}" ${tab === k ? 'aria-current="page"' : ''}>${ico}<span>${label}</span></a>`;
-  return `<nav class="s-nav" aria-label="เมนูหลัก">${it('home', '#/s', ICON.home, 'หน้าแรก')}${it('search', '#/s/search', ICON.search, 'ค้นหา')}${it('exam', '#/s/exam', ICON.exam, 'เตรียมสอบ')}${it('me', '#/s/me', ICON.me, 'ของฉัน')}</nav>`;
+  const n = S.student ? overdueOf(S.student).length : 0;
+  const it = (k, href, ico, label, badge) => `<a href="${href}" ${tab === k ? 'aria-current="page"' : ''}><span class="ico">${ico}${badge ? `<i class="badge" aria-hidden="true">${badge}</i>` : ''}</span><span>${label}</span>${badge ? `<span class="sr">เกินกำหนด ${badge} เล่ม</span>` : ''}</a>`;
+  return `<nav class="s-nav" aria-label="เมนูหลัก">${it('home', '#/s', ICON.home, 'หน้าแรก')}${it('search', '#/s/search', ICON.search, 'ค้นหา')}${it('exam', '#/s/exam', ICON.exam, 'เตรียมสอบ')}${it('late', '#/s/late', ICON.late, 'เกินกำหนด', n)}${it('me', '#/s/me', ICON.me, 'ของฉัน')}</nav>`;
 }
 const sWrap = (inner, tab) => `<div class="s-wrap">${offlineBar()}<main>${inner}</main>${sNav(tab)}</div>`;
 const sHead = (title, backTo) => `<div class="s-head"><a class="back" href="${backTo || '#/s'}" aria-label="ย้อนกลับ" onclick="if(history.length>1){history.back();return false}">${ICON.back}</a><h1 tabindex="-1" style="font-size:1.15rem">${title}</h1></div>`;
@@ -26,6 +27,7 @@ function viewStudent(p, q) {
   if (page === 'search') return sSearch(q);
   if (page === 'book') return sBook(p[1]);
   if (page === 'exam') return sExam(q);
+  if (page === 'late') return sLate();
   if (page === 'me') return sMe();
   return sHome();
 }
@@ -62,7 +64,7 @@ function sHome() {
     ${sec('วรรณกรรมและวรรณคดีไทย', thai, '#/s/search?type=lit&lang=th')}
     ${sec('อ่านภาษาอังกฤษ', eng, '#/s/search?type=lit&lang=en')}
     <p class="small muted" style="padding:20px 16px 8px">ห้องสมุดเปิด 07:00–16:30 น. วันจันทร์ถึงศุกร์</p>`, 'home'),
-    mount(root) { $('[data-search]', root).addEventListener('submit', e => { e.preventDefault(); const v = e.target.q.value.trim(); go('#/s/search' + (v ? '?q=' + encodeURIComponent(v) : '')); }); }
+    mount(root) { $('[data-search]', root).addEventListener('submit', e => { e.preventDefault(); const v = e.target.elements.q.value.trim(); go('#/s/search' + (v ? '?q=' + encodeURIComponent(v) : '')); }); }
   };
 }
 
@@ -200,10 +202,10 @@ function sMe() {
       </form>`, 'me'),
       mount(root) {
         $('[data-login]', root).addEventListener('submit', e => {
-          e.preventDefault(); const f = e.target, id = f.id.value.trim();
+          e.preventDefault(); const f = e.target, id = f.elements.id.value.trim();
           const msg = t => { $('#lmsg').innerHTML = `<div class="msg err" role="alert">${t}</div>`; };
           if (!SBY[id]) return msg(`ไม่พบรหัส ${esc(id) || '(ว่าง)'} ตรวจรหัส 5 หลักบนบัตรนักเรียนอีกครั้ง`);
-          if (f.pw.value !== '1234') return msg('รหัสผ่านไม่ถูกต้อง ลองอีกครั้ง หรือแจ้งครูที่ห้องสมุดเพื่อตั้งรหัสใหม่');
+          if (f.elements.pw.value !== '1234') return msg('รหัสผ่านไม่ถูกต้อง ลองอีกครั้ง หรือแจ้งครูที่ห้องสมุดเพื่อตั้งรหัสใหม่');
           S.student = id; refresh();
         });
       }
@@ -226,5 +228,45 @@ function sMe() {
       <p class="small muted" style="margin-top:10px">สติกเกอร์ได้จากการมาห้องสมุดและการยืมของตัวเอง ไม่มีการจัดอันดับกับเพื่อน</p></section>
     <section class="sec"><div class="sec-h"><h2>ขนาดตัวอักษร</h2></div>${fszControl()}</section>`, 'me'),
     mount(root) { $('[data-logout]', root).addEventListener('click', () => { S.student = null; refresh(); }); }
+  };
+}
+
+/* ---------- หนังสือเกินกำหนดและค่าปรับ (FR-M3-04, FR-M3-05) ---------- */
+function sLate() {
+  const st = S.student && SBY[S.student];
+  if (!st) return {
+    title: 'เกินกำหนด', html: sWrap(`
+      <div class="s-head" style="padding:16px 16px 4px"><h1 tabindex="-1">หนังสือเกินกำหนด</h1></div>
+      <section class="sec"><p class="muted">เข้าสู่ระบบที่เมนู "ของฉัน" เพื่อดูว่ามีเล่มไหนเกินกำหนดคืนบ้าง</p>
+        <a class="btn primary" href="#/s/me" style="width:100%;margin-top:12px">ไปที่หน้าเข้าสู่ระบบ</a></section>`, 'late')
+  };
+  const late = overdueOf(st.id), total = fineTotal(st.id);
+  const soon = loansOf(st.id).filter(l => lateDays(l) === 0).sort((a, b) => a.due - b.due);
+  const row = l => {
+    const b = BY[l.bc], d = lateDays(l);
+    return `<a class="loan soon" href="#/s/book/${b.bc}">${cover(b)}<div><div style="font-weight:500;line-height:1.4">${esc(shortTitle(b.t))}</div>
+      <div class="due">เกินกำหนด ${d} วัน ครบกำหนด ${thShort(l.due)}</div>
+      <div class="small muted">ค่าปรับขณะนี้ ${d} บาท (วันละ ${FINE_RATE} บาท)</div></div></a>`;
+  };
+  const okRow = l => { const b = BY[l.bc], d = dueText(l.due); return `<a class="loan" href="#/s/book/${b.bc}">${cover(b)}<div><div style="font-weight:500;line-height:1.4">${esc(shortTitle(b.t))}</div><div class="due">${d.txt}</div></div></a>`; };
+  return {
+    title: 'เกินกำหนด', html: sWrap(`
+    <div class="s-head" style="padding:16px 16px 4px"><h1 tabindex="-1">หนังสือเกินกำหนด</h1></div>
+    ${late.length ? `
+    <section class="sec">
+      <div class="fine-box" role="status">
+        <div class="small">ค่าปรับรวมถึงวันนี้</div>
+        <div class="fine-num num">${fmt(total)} บาท</div>
+        <div class="small">${late.length} เล่ม ชำระที่เคาน์เตอร์ห้องสมุดตอนนำหนังสือมาคืน</div>
+      </div>
+      <p class="small muted" style="margin-top:10px">ค่าปรับคิดวันละ ${FINE_RATE} บาทต่อเล่ม นับทุกวันรวมวันหยุด และจะเพิ่มขึ้นทุกวันจนกว่าจะนำมาคืน</p>
+    </section>
+    <section class="sec"><div class="sec-h"><h2>รายการที่เกินกำหนด</h2></div>
+      <div class="stack">${late.map(row).join('')}</div></section>`
+      : `<section class="sec"><div class="msg ok" style="margin:0">ไม่มีหนังสือเกินกำหนด ไม่มีค่าปรับค้างชำระ</div>
+      <p class="small muted" style="margin-top:10px">หน้านี้จะแจ้งเตือนทันทีที่มีเล่มใดเลยวันครบกำหนดคืน</p></section>`}
+    ${soon.length ? `<section class="sec"><div class="sec-h"><h2>ใกล้ครบกำหนด ${soon.length} เล่ม</h2></div>
+      <div class="stack">${soon.map(okRow).join('')}</div>
+      <p class="small muted" style="margin-top:10px">ยังไม่มีค่าปรับ นำมาคืนหรือขอต่ออายุที่เคาน์เตอร์ก่อนวันครบกำหนด</p></section>` : ''}`, 'late')
   };
 }
