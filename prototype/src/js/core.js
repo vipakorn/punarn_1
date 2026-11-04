@@ -131,17 +131,24 @@ Object.assign(SBY['43105'], { f: true, pre: 'ด.ญ.', first: 'ณิชาภ�
 Object.assign(SBY['40115'], { f: false, pre: 'นาย', first: 'ภาคิน', last: 'ชัยมงคล', nick: 'ภู', mv: 4 });
 const cls = s => `ม.${s.g}/${s.room}`;
 const fullName = s => `${s.pre}${s.first} ${s.last}`;
+/* บุคลากร: "งาน" (job) แยกจาก "สิทธิ์ผู้ดูแลระดับโรงเรียน" (admin) เพื่อให้มีผู้ดูแลได้หลายคน
+   invited = ส่งคำเชิญแล้วแต่ยังไม่ยืนยันอีเมล ยังไม่นับเป็นผู้ดูแลที่ใช้งานได้ */
+const JOB = { librarian: 'ครูผู้รับผิดชอบห้องสมุด', subject: 'ครูประจำวิชา', exec: 'ผู้บริหารโรงเรียน' };
 const STAFF = [
-  { name: 'ครูวิไลวรรณ ทองคำ', role: 'ผู้ดูแลระดับโรงเรียน', note: 'ครูผู้รับผิดชอบห้องสมุด' },
-  { name: 'ครูสมชาย ใจดี', role: 'ครูผู้รับผิดชอบห้องสมุด', note: 'ครูภาษาไทย' },
-  { name: 'ครูอรอุมา แสงทอง', role: 'ครูประจำวิชา', note: 'ครูวิทยาศาสตร์' },
-  { name: 'นายประเสริฐ มั่นคง', role: 'ผู้บริหารโรงเรียน', note: 'ผู้อำนวยการ (ดูอย่างเดียว)' }
+  { id: 's1', name: 'ครูวิไลวรรณ ทองคำ', email: 'wilaiwan.t@punarn.ac.th', job: 'librarian', admin: true, active: true, note: 'ครูบรรณารักษ์' },
+  { id: 's2', name: 'ครูสมชาย ใจดี', email: 'somchai.j@punarn.ac.th', job: 'librarian', admin: false, active: true, note: 'ครูภาษาไทย' },
+  { id: 's3', name: 'ครูอรอุมา แสงทอง', email: 'onuma.s@punarn.ac.th', job: 'subject', admin: false, active: true, note: 'ครูวิทยาศาสตร์' },
+  { id: 's4', name: 'นายประเสริฐ มั่นคง', email: 'prasert.m@punarn.ac.th', job: 'exec', admin: false, active: true, note: 'ผู้อำนวยการ ดูอย่างเดียว' }
 ];
+const SID_STAFF = id => STAFF.find(s => s.id === id);
+const liveAdmins = () => STAFF.filter(s => s.active && s.admin && !s.invited);
+const canAdmin = () => S.role !== 'assistant' && !!(SID_STAFF(S.me) || {}).admin && !!(SID_STAFF(S.me) || {}).active;
+const permLog = what => S.audit.unshift({ t: now(), who: (SID_STAFF(S.me) || {}).name || 'ระบบ', what, perm: true });
 const ASSIST_IDS = ['43105', '42214', '41330', '40407'];
 
 /* ---------- app state (in memory only) ---------- */
 const S = {
-  role: 'teacher', student: null, offline: false, queue: [],
+  role: 'teacher', me: 's1', exported: {}, student: null, offline: false, queue: [],
   policy: { max: 3, days: 7, renew: 1, block: false }, pin: '1234',
   loans: [], visits: [], log: [], drafts: [], classUse: [], labelQueue: [], audit: [], back: [],
   kioskOpened: false, circ: null, cat: null

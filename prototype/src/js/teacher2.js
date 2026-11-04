@@ -52,7 +52,7 @@ function tItems() {
 }
 const ITEM_HEAD = ['บาร์โค้ด (Barcode)', 'ISBN', 'ชื่อเรื่อง (Title)', 'ฉบับพิมพ์ (Edition)', 'ผู้แต่ง (Author)', 'สำนักพิมพ์ (Publisher)', 'ปีที่พิมพ์ (Year)', 'จำนวนหน้า (Pages)', 'ภาษา (Language)', 'ประเภททรัพยากร (Resource type)', 'เลขหมู่ DDC (DDC no.)', 'เลขเรียกหนังสือ (Call no.)', 'หัวเรื่อง (Subjects)', 'ระดับชั้นที่เหมาะสม (Grade level)', 'สถานที่จัดเก็บ (Location)', 'สถานะ (Status)'];
 const itemRow = b => [b.bc, b.isbn, b.t, b.ed, b.a, b.p, b.y, b.pg, b.lang, b.type, b.ddc, b.call, b.subj, b.lvl, b.loc, STATUS[b.s]];
-const exportItems = () => { download(`punarn-items-${TODAY.getFullYear() + 543}${String(TODAY.getMonth() + 1).padStart(2, '0')}${String(TODAY.getDate()).padStart(2, '0')}.csv`, toCSV([ITEM_HEAD, ...BOOKS.map(itemRow)])); toast(`ส่งออก ${BOOKS.length} รายการเป็นไฟล์ CSV แล้ว`); };
+const exportItems = quiet => { download(`punarn-items-${TODAY.getFullYear() + 543}${String(TODAY.getMonth() + 1).padStart(2, '0')}${String(TODAY.getDate()).padStart(2, '0')}.csv`, toCSV([ITEM_HEAD, ...BOOKS.map(itemRow)])); quiet || toast(`ส่งออก ${BOOKS.length} รายการเป็นไฟล์ CSV แล้ว`); };
 
 /* simulated import with column mapping and error rows (FR-M1-04, FR-M2-06) */
 function parseCSV(text) {
@@ -181,7 +181,7 @@ function tReports(q) {
     <table class="tbl"><thead><tr><th>อันดับ</th><th>ชื่อเรื่อง</th><th>ประเภท</th><th class="num">ครั้ง</th></tr></thead><tbody>${R.top.map((x, i) => `<tr><td>${i + 1}</td><td>${esc(shortTitle(x.b.t))}</td><td class="small">${esc(x.b.type)}</td><td class="num">${x.n}</td></tr>`).join('')}</tbody></table>
     <h2>การใช้ห้องสมุดเป็นห้องเรียน</h2>
     <table class="tbl"><thead><tr><th>วันที่</th><th>ครูผู้สอน</th><th>รายวิชา</th><th>ห้อง</th><th class="num">นักเรียน</th></tr></thead><tbody>${R.classes.map(c => `<tr><td>${thShort(c.d)}</td><td>${esc(c.teacher)}</td><td>${esc(c.subj)}</td><td>${esc(c.room)}</td><td class="num">${c.n}</td></tr>`).join('')}</tbody></table>
-    <div class="row sig" style="justify-content:space-around;margin-top:48px;text-align:center"><div>ลงชื่อ ........................................<br>(ครูวิไลวรรณ ทองคำ)<br>ครูผู้รับผิดชอบห้องสมุด</div><div>ลงชื่อ ........................................<br>(นายประเสริฐ มั่นคง)<br>ผู้อำนวยการ${esc(SCHOOL.name)}</div></div>
+    <div class="row sig" style="justify-content:space-around;margin-top:48px;text-align:center"><div>ลงชื่อ ........................................<br>(........................................)<br>ครูผู้รับผิดชอบห้องสมุด</div><div>ลงชื่อ ........................................<br>(........................................)<br>ผู้บริหารสถานศึกษา</div></div>
   </article>`;
   return {
     title: 'รายงาน',
@@ -226,30 +226,210 @@ function tImport() {
   };
 }
 
-/* ---------- Admin: users & roles, transfer admin (FR-M1-02, M1-06, US-07) ---------- */
-function tUsers() {
+/* ---------- Admin: users & roles (FR-M1-02, M1-06, US-07) ----------
+   หลักการ: (1) ผู้ดูแลระดับโรงเรียนมีได้หลายคน (2) ห้ามเหลือผู้ดูแลที่ใช้งานได้เป็นศูนย์
+   (3) ผู้ที่ยังไม่ยืนยันอีเมลไม่นับเป็นผู้ดูแล (4) ทุกการเปลี่ยนสิทธิ์บันทึกในประวัติ */
+const REVOKE_REASONS = ['ย้ายโรงเรียน', 'เกษียณอายุราชการ', 'ลาออก', 'เปลี่ยนหน้าที่ ไม่ใช้ระบบแล้ว', 'อื่น ๆ'];
+const leavesNoAdmin = (s, after) => STAFF.filter(x => x.id !== s.id && x.active && x.admin && !x.invited).length + (after.active && after.admin && !s.invited ? 1 : 0) === 0;
+const NO_ADMIN_MSG = 'ต้องมีผู้ดูแลระดับโรงเรียนที่ใช้งานได้อย่างน้อย 1 คนเสมอ แต่งตั้งผู้ดูแลคนใหม่และให้ยืนยันอีเมลก่อน แล้วจึงยกเลิกสิทธิ์คนเดิม';
+const errBox = (sel, d, txt) => { $(sel, d).innerHTML = `<div class="msg err" role="alert">${txt}</div>`; };
+function protoSwitch() {
+  const opts = STAFF.filter(s => s.active && !s.invited && s.job !== 'exec');
+  return `<div class="proto-switch noprint"><label class="field"><span>ต้นแบบ: ทำงานในนามครู</span><select class="input" data-asme>${opts.map(s => `<option value="${s.id}" ${s.id === S.me ? 'selected' : ''}>${esc(s.name)}${s.admin ? ' (ผู้ดูแล)' : ''}</option>`).join('')}</select></label><p class="small muted">ใช้ทดลองว่าครูแต่ละคนเห็นเมนูต่างกันอย่างไร ระบบจริงสลับด้วยการล็อกอิน</p></div>`;
+}
+function mountProtoSwitch(root) { $('[data-asme]', root)?.addEventListener('change', e => { S.me = e.target.value; toast(`ทำงานในนาม ${SID_STAFF(S.me).name}`); refresh(); }); }
+function addTeacherDialog(defaultAdmin = false) {
+  openDialog(`<h2 id="dlg-h">เพิ่มครู</h2><p class="muted">ระบบส่งคำเชิญไปที่อีเมล บัญชีใช้งานได้เมื่อครูกดยืนยัน</p>
+    <form data-at class="stack" style="margin-top:12px" novalidate>
+      <label class="field"><span>ชื่อ-นามสกุล</span><input class="input" name="name" placeholder="เช่น ครูสุดา รักเรียน" data-autofocus></label>
+      <label class="field"><span>อีเมลของโรงเรียน</span><input class="input" name="email" type="email" inputmode="email" placeholder="ชื่อ@โรงเรียน.ac.th"></label>
+      <label class="field"><span>งาน</span><select class="input" name="job">${Object.entries(JOB).map(([k, v]) => `<option value="${k}" ${k === 'librarian' ? 'selected' : ''}>${v}</option>`).join('')}</select></label>
+      <label class="row small"><input type="checkbox" name="admin" ${defaultAdmin ? 'checked' : ''}> แต่งตั้งเป็นผู้ดูแลระดับโรงเรียนด้วย ${info('ตั้งค่าโรงเรียน จัดการผู้ใช้และสิทธิ์ ส่งออกข้อมูล และส่งมอบงานได้')}</label>
+      <div id="at-msg" aria-live="polite"></div>
+      <div class="acts"><button type="button" class="btn" data-close>ยกเลิก</button><button class="btn primary">ส่งคำเชิญ</button></div></form>`, d => {
+    const f = $('[data-at]', d);
+    const syncExec = () => { const ex = f.elements.job.value === 'exec'; f.elements.admin.disabled = ex; if (ex) f.elements.admin.checked = false; };
+    f.elements.job.addEventListener('change', syncExec); syncExec();
+    f.addEventListener('submit', e => {
+      e.preventDefault();
+      const name = f.elements.name.value.trim(), email = f.elements.email.value.trim().toLowerCase(), job = f.elements.job.value, admin = f.elements.admin.checked;
+      if (!name) return errBox('#at-msg', d, 'ใส่ชื่อ-นามสกุลของครู');
+      if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return errBox('#at-msg', d, 'อีเมลไม่ถูกต้อง ตัวอย่าง somsri@school.ac.th');
+      const dup = STAFF.find(s => s.email === email);
+      if (dup) return errBox('#at-msg', d, `อีเมลนี้เป็นของ ${esc(dup.name)} อยู่แล้ว${dup.active ? '' : ' ซึ่งถูกยกเลิกสิทธิ์ไว้ ใช้ปุ่มคืนสิทธิ์แทน'}`);
+      const s = { id: 's' + (STAFF.length + 1), name, email, job, admin, active: true, invited: true, note: '' };
+      STAFF.push(s);
+      permLog(`เพิ่มครู ${name} (${JOB[job]}) ส่งคำเชิญไปที่ ${email}${admin ? ' และแต่งตั้งเป็นผู้ดูแลระดับโรงเรียน มีผลเมื่อยืนยันอีเมล' : ''}`);
+      closeDialog(); toast(`ส่งคำเชิญให้ ${name} แล้ว`); refresh();
+    });
+  });
+}
+function editStaffDialog(s) {
+  const self = s.id === S.me;
+  openDialog(`<h2 id="dlg-h">แก้ไขบทบาท</h2><p class="muted">${esc(s.name)} · ${esc(s.email)}</p>
+    <form data-es class="stack" style="margin-top:12px">
+      <label class="field"><span>งาน</span><select class="input" name="job">${Object.entries(JOB).map(([k, v]) => `<option value="${k}" ${k === s.job ? 'selected' : ''}>${v}</option>`).join('')}</select></label>
+      <label class="row small"><input type="checkbox" name="admin" ${s.admin ? 'checked' : ''}> ผู้ดูแลระดับโรงเรียน</label>
+      <p class="small muted" data-exnote hidden>ผู้บริหารโรงเรียนดูรายงานได้อย่างเดียว จึงไม่รับสิทธิ์ผู้ดูแล</p>
+      <div id="es-msg" aria-live="polite"></div>
+      <div class="acts"><button type="button" class="btn" data-close>ยกเลิก</button><button class="btn primary">บันทึก</button></div></form>`, d => {
+    const f = $('[data-es]', d);
+    const sync = () => {
+      const ex = f.elements.job.value === 'exec'; f.elements.admin.disabled = ex; if (ex) f.elements.admin.checked = false; $('[data-exnote]', d).hidden = !ex;
+      $('#es-msg', d).innerHTML = self && s.admin && !f.elements.admin.checked ? '<div class="msg warn" role="status">คุณกำลังยกเลิกสิทธิ์ผู้ดูแลของตัวเอง หลังบันทึกจะเข้าหน้าตั้งค่าโรงเรียนไม่ได้อีก ถ้าจะย้ายหรือเปลี่ยนหน้าที่ ใช้หน้าส่งมอบงานจะครบกว่า</div>' : '';
+    };
+    f.elements.job.addEventListener('change', sync); f.elements.admin.addEventListener('change', sync); sync();
+    f.addEventListener('submit', e => {
+      e.preventDefault();
+      const job = f.elements.job.value, admin = f.elements.admin.checked;
+      if (job === s.job && admin === s.admin) return closeDialog();
+      if (leavesNoAdmin(s, { active: true, admin })) return errBox('#es-msg', d, NO_ADMIN_MSG);
+      if (job !== s.job) permLog(`เปลี่ยนงานของ ${s.name} จาก ${JOB[s.job]} เป็น ${JOB[job]}`);
+      if (admin !== s.admin) permLog(admin ? `แต่งตั้ง ${s.name} เป็นผู้ดูแลระดับโรงเรียน${s.invited ? ' มีผลเมื่อยืนยันอีเมล' : ''}` : `ยกเลิกสิทธิ์ผู้ดูแลระดับโรงเรียนของ ${s.name}`);
+      s.job = job; s.admin = admin; closeDialog(); toast('บันทึกบทบาทแล้ว'); refresh();
+    });
+  });
+}
+function revokeStaffDialog(s) {
+  if (leavesNoAdmin(s, { active: false, admin: false })) {
+    return openDialog(`<h2 id="dlg-h">ยังยกเลิกสิทธิ์ไม่ได้</h2><p style="margin-top:8px">${esc(s.name)} เป็นผู้ดูแลระดับโรงเรียนคนสุดท้าย</p><div class="msg warn" role="status" style="margin-top:12px"><div>${NO_ADMIN_MSG}</div></div>
+      <div class="acts"><button type="button" class="btn" data-close>ปิด</button><a class="btn primary" href="#/t/admin/handover" data-close>ไปหน้าส่งมอบงาน</a></div>`);
+  }
+  openDialog(`<h2 id="dlg-h">ยกเลิกสิทธิ์การเข้าใช้</h2><p class="muted">${esc(s.name)} จะเข้าระบบไม่ได้ ข้อมูลที่ครูคนนี้บันทึกไว้ยังอยู่ครบ และคืนสิทธิ์ได้ภายหลัง</p>
+    <form data-rv class="stack" style="margin-top:12px"><label class="field"><span>เหตุผล</span><select class="input" name="why">${REVOKE_REASONS.map(r => `<option>${r}</option>`).join('')}</select></label>
+      <div class="acts"><button type="button" class="btn" data-close>ยกเลิก</button><button class="btn danger">ยกเลิกสิทธิ์</button></div></form>`, d => {
+    $('[data-rv]', d).addEventListener('submit', e => {
+      e.preventDefault(); const why = e.target.elements.why.value;
+      permLog(`ยกเลิกสิทธิ์การเข้าใช้ของ ${s.name} (${why})${s.admin ? ' รวมถึงสิทธิ์ผู้ดูแลระดับโรงเรียน' : ''}`);
+      Object.assign(s, { active: false, admin: false, revokedAt: now(), why }); closeDialog(); toast(`ยกเลิกสิทธิ์ ${s.name} แล้ว`); refresh();
+    });
+  });
+}
+function addAssistantDialog() {
+  openDialog(`<h2 id="dlg-h">เพิ่มยุวบรรณารักษ์</h2><form data-ad class="stack" style="margin-top:10px"><label class="field"><span>รหัสประจำตัวนักเรียน</span><input class="input" name="id" inputmode="numeric" maxlength="5" data-autofocus></label><div id="ad-who" class="small" aria-live="polite"></div>
+    <div class="acts"><button type="button" class="btn" data-close>ยกเลิก</button><button class="btn primary">ให้สิทธิ์ยุวบรรณารักษ์</button></div></form>`, d => {
+    const f = $('[data-ad]', d);
+    f.elements.id.addEventListener('input', () => { const v = f.elements.id.value, s = SBY[v]; $('#ad-who', d).textContent = s ? `${fullName(s)} ${cls(s)}${ASSIST_IDS.includes(v) ? ' เป็นยุวบรรณารักษ์อยู่แล้ว' : ''}${s.g === 6 ? ' (ม.6 จะจบการศึกษาปีนี้)' : ''}` : v.length === 5 ? 'ไม่พบรหัสนี้' : ''; });
+    f.addEventListener('submit', e => {
+      e.preventDefault(); const s = SBY[f.elements.id.value];
+      if (!s) { $('#ad-who', d).textContent = 'ไม่พบรหัสนี้ ตรวจรหัส 5 หลักอีกครั้ง'; return; }
+      if (ASSIST_IDS.includes(s.id)) { $('#ad-who', d).textContent = `${s.first} เป็นยุวบรรณารักษ์อยู่แล้ว`; return; }
+      ASSIST_IDS.push(s.id); permLog(`ให้สิทธิ์ยุวบรรณารักษ์แก่ ${fullName(s)} ${cls(s)}`);
+      closeDialog(); toast(`ให้สิทธิ์ยุวบรรณารักษ์แก่ ${s.first} แล้ว`); refresh();
+    });
+  });
+}
+function removeAssistantDialog(ids, title) {
+  const pend = S.drafts.filter(x => ids.includes(x.by));
+  openDialog(`<h2 id="dlg-h">${esc(title)}</h2><ul style="margin:10px 0 0 20px">${ids.map(id => `<li>${esc(fullName(SBY[id]))} ${cls(SBY[id])}</li>`).join('')}</ul>
+    ${pend.length ? `<div class="msg warn" role="status" style="margin-top:12px"><div>มีร่างการลงรายการค้างอยู่ ${pend.length} รายการ ร่างจะยังอยู่ในหน้า "วันนี้" ให้ครูตรวจต่อได้</div></div>` : ''}
+    <div class="acts"><button type="button" class="btn" data-close>ยกเลิก</button><button type="button" class="btn danger" data-ok>ยกเลิกสิทธิ์</button></div>`, d => {
+    $('[data-ok]', d).addEventListener('click', () => {
+      ids.forEach(id => { ASSIST_IDS.splice(ASSIST_IDS.indexOf(id), 1); permLog(`ยกเลิกสิทธิ์ยุวบรรณารักษ์ของ ${fullName(SBY[id])} ${cls(SBY[id])}`); });
+      closeDialog(); toast(`ยกเลิกสิทธิ์แล้ว ${ids.length} คน`); refresh();
+    });
+  });
+}
+function tUsers(q) {
+  const live = STAFF.filter(s => s.active), gone = STAFF.filter(s => !s.active), nAd = liveAdmins().length;
+  const g6 = ASSIST_IDS.filter(id => SBY[id].g === 6);
+  const onlyPerm = q && q.log === 'perm', logs = S.audit.filter(a => !onlyPerm || a.perm).slice(0, 15);
+  const row = s => `<tr><td><div class="t">${esc(s.name)}${s.id === S.me ? ' <span class="small muted">(คุณ)</span>' : ''}</div><div class="small muted">${esc(s.email)}${s.note ? ' · ' + esc(s.note) : ''}</div></td>
+      <td>${JOB[s.job]}</td>
+      <td>${s.admin ? `<span class="pill on-shelf">ผู้ดูแลระดับโรงเรียน</span>` : '<span class="small muted">—</span>'}${s.invited ? ` <span class="pill ref">รอยืนยันอีเมล</span> <button type="button" class="linkbtn small" data-accept="${s.id}">ต้นแบบ: จำลองการยืนยัน</button>` : ''}</td>
+      <td class="num" style="white-space:nowrap"><button type="button" class="btn sm" data-edit="${s.id}">แก้ไขบทบาท</button> ${s.id === S.me ? `<a class="btn ghost sm" href="#/t/admin/handover">ส่งมอบงาน</a>` : `<button type="button" class="btn ghost sm" data-revoke="${s.id}">ยกเลิกสิทธิ์</button>`}</td></tr>`;
   return {
     title: 'ผู้ใช้และสิทธิ์',
-    actions: `<button class="btn" data-add>เพิ่มยุวบรรณารักษ์</button><button class="btn primary" data-transfer>โอนสิทธิ์ผู้ดูแล</button>`,
-    body: `<section class="panel"><h2 style="margin-bottom:12px">ครูและผู้บริหาร</h2><table class="tbl"><thead><tr><th>ชื่อ</th><th>บทบาท</th><th>หมายเหตุ</th></tr></thead><tbody>${STAFF.map(s => `<tr><td>${esc(s.name)}</td><td>${s.role === 'ผู้ดูแลระดับโรงเรียน' ? `<span class="pill on-shelf">${s.role}</span>` : esc(s.role)}</td><td class="small muted">${esc(s.note)}</td></tr>`).join('')}</tbody></table></section>
-    <section class="panel"><h2>ยุวบรรณารักษ์ ${ASSIST_IDS.length} คน</h2><p class="small muted" style="margin:4px 0 12px">ยืม-คืน เปิด kiosk และลงรายการเป็นร่างได้ เห็นผู้ยืมเพียงชื่อและชั้น ไม่เห็นประวัติการยืม ไม่เห็นรายงาน</p>
-      <table class="tbl"><thead><tr><th>ชื่อ</th><th>ชั้น</th><th>รหัส</th><th></th></tr></thead><tbody>${ASSIST_IDS.map(id => `<tr><td>${esc(fullName(SBY[id]))}</td><td>${cls(SBY[id])}</td><td class="num" style="text-align:left">${id}</td><td class="num"><button class="btn ghost sm" data-rm="${id}">ยกเลิกสิทธิ์</button></td></tr>`).join('')}</tbody></table></section>
-    <section class="panel"><h2 style="margin-bottom:12px">ประวัติการแก้ไขข้อมูล</h2><table class="tbl"><tbody>${S.audit.slice(0, 8).map(a => `<tr><td class="small" style="white-space:nowrap">${thShort(a.t)} ${hhmm(a.t)}</td><td class="small">${esc(a.who)}</td><td class="small">${esc(a.what)}</td></tr>`).join('')}</tbody></table></section>`,
-    mount() {
-      $('[data-transfer]').addEventListener('click', () => openDialog(`<h2 id="dlg-h">โอนสิทธิ์ผู้ดูแลระดับโรงเรียน</h2><p class="muted">ใช้เมื่อเปลี่ยนครูผู้รับผิดชอบห้องสมุด ข้อมูลหนังสือ สถิติ และรายงานทั้งหมดอยู่ครบ ไม่มีอะไรถูกลบ</p>
-        <form data-tr class="stack" style="margin-top:14px"><label class="field"><span>โอนให้</span><select class="input" name="to">${STAFF.filter(s => s.role !== 'ผู้ดูแลระดับโรงเรียน' && s.role !== 'ผู้บริหารโรงเรียน').map(s => `<option>${s.name}</option>`).join('')}<option>ครูท่านอื่น (ส่งคำเชิญทางอีเมล)</option></select></label>
-        <label class="row small"><input type="checkbox" name="keep" checked> ให้ฉันยังเป็นครูผู้รับผิดชอบห้องสมุดต่อ</label>
-        <p class="small muted">ผู้รับจะได้อีเมลยืนยัน สิทธิ์จะโอนเมื่อผู้รับกดยืนยัน</p>
-        <div class="acts"><button type="button" class="btn" data-close>ยกเลิก</button><button class="btn primary">ส่งคำขอโอนสิทธิ์</button></div></form>`, d => {
-        $('[data-tr]', d).addEventListener('submit', e => { e.preventDefault(); const to = e.target.elements.to.value; closeDialog(); S.audit.unshift({ t: now(), who: 'ครูวิไลวรรณ ทองคำ', what: `ส่งคำขอโอนสิทธิ์ผู้ดูแลให้ ${to}` }); toast(`ส่งคำขอโอนสิทธิ์ให้ ${to} แล้ว รอการยืนยัน`); refresh(); });
-      }));
-      $('[data-add]').addEventListener('click', () => openDialog(`<h2 id="dlg-h">เพิ่มยุวบรรณารักษ์</h2><form data-ad class="stack" style="margin-top:10px"><label class="field"><span>รหัสประจำตัวนักเรียน</span><input class="input" name="id" inputmode="numeric" maxlength="5" data-autofocus></label><div id="ad-who" class="small" aria-live="polite"></div>
-        <div class="acts"><button type="button" class="btn" data-close>ยกเลิก</button><button class="btn primary">ให้สิทธิ์ยุวบรรณารักษ์</button></div></form>`, d => {
-        const f = $('[data-ad]', d);
-        f.elements.id.addEventListener('input', () => { const v = f.elements.id.value; const s = SBY[v]; $('#ad-who', d).textContent = s ? `${fullName(s)} ${cls(s)}` : v.length === 5 ? 'ไม่พบรหัสนี้' : ''; });
-        f.addEventListener('submit', e => { e.preventDefault(); const s = SBY[f.elements.id.value]; if (!s) { $('#ad-who', d).textContent = 'ไม่พบรหัสนี้ ตรวจรหัส 5 หลักอีกครั้ง'; return; } if (!ASSIST_IDS.includes(s.id)) ASSIST_IDS.push(s.id); closeDialog(); toast(`ให้สิทธิ์ยุวบรรณารักษ์แก่ ${s.first} แล้ว`); refresh(); });
-      }));
-      $$('[data-rm]').forEach(b => b.addEventListener('click', () => { const i = ASSIST_IDS.indexOf(b.dataset.rm); ASSIST_IDS.splice(i, 1); toast('ยกเลิกสิทธิ์แล้ว'); refresh(); }));
+    actions: `<button class="btn" data-addt>${ICON.users}เพิ่มครู</button><button class="btn" data-adda>เพิ่มยุวบรรณารักษ์</button><a class="btn primary" href="#/t/admin/handover">ส่งมอบงาน</a>`,
+    body: `<section class="panel"><div class="panel-h"><h2>ครูและผู้บริหาร ${live.length} คน</h2></div>
+      <p class="small ${nAd === 1 ? '' : 'muted'}" style="margin:4px 0 12px">ผู้ดูแลระดับโรงเรียน ${nAd} คน ${nAd === 1 ? '<b>แนะนำให้มีอย่างน้อย 2 คน</b> เผื่อคนใดคนหนึ่งย้ายหรือลา' : ''} ระบบไม่ยอมให้เหลือผู้ดูแลเป็นศูนย์คน ${info('ผู้ดูแลระดับโรงเรียนตั้งค่าโรงเรียน จัดการผู้ใช้และสิทธิ์ นำเข้านักเรียน และส่งออกข้อมูลได้ ครูที่ยังไม่ยืนยันอีเมลยังไม่นับ')}</p>
+      <table class="tbl"><thead><tr><th>ชื่อ</th><th>งาน</th><th>สิทธิ์</th><th></th></tr></thead><tbody>${live.map(row).join('')}</tbody></table>
+      ${gone.length ? `<details style="margin-top:12px"><summary class="small">ยกเลิกสิทธิ์แล้ว ${gone.length} คน</summary><table class="tbl" style="margin-top:8px"><tbody>${gone.map(s => `<tr><td><div class="t">${esc(s.name)}</div><div class="small muted">${esc(s.email)}</div></td><td class="small">${esc(s.why || '')} ${s.revokedAt ? thShort(s.revokedAt) : ''}</td><td class="num"><button type="button" class="btn ghost sm" data-restore="${s.id}">คืนสิทธิ์</button></td></tr>`).join('')}</tbody></table></details>` : ''}
+    </section>
+    <section class="panel"><div class="panel-h"><h2>ยุวบรรณารักษ์ ${ASSIST_IDS.length} คน</h2>${g6.length ? `<button type="button" class="btn ghost sm" data-g6>ยกเลิกสิทธิ์ ม.6 ที่จบการศึกษา ${g6.length} คน</button>` : ''}</div>
+      <p class="small muted" style="margin:4px 0 12px">ยืม-คืน เปิด kiosk และลงรายการเป็นร่างได้ เห็นผู้ยืมเพียงชื่อและชั้น ไม่เห็นประวัติการยืม ไม่เห็นรายงาน</p>
+      ${ASSIST_IDS.length ? `<table class="tbl"><thead><tr><th>ชื่อ</th><th>ชั้น</th><th>รหัส</th><th>ร่างค้าง</th><th></th></tr></thead><tbody>${ASSIST_IDS.map(id => { const s = SBY[id], nd = S.drafts.filter(x => x.by === id).length; return `<tr><td>${esc(fullName(s))}</td><td>${cls(s)}${s.g === 6 ? ' <span class="pill late">จบการศึกษาปีนี้</span>' : ''}</td><td class="num" style="text-align:left">${id}</td><td class="num" style="text-align:left">${nd || '—'}</td><td class="num"><button type="button" class="btn ghost sm" data-rma="${id}">ยกเลิกสิทธิ์</button></td></tr>`; }).join('')}</tbody></table>`
+        : `<div class="msg warn" role="status"><div>ยังไม่มียุวบรรณารักษ์ กดเพิ่มยุวบรรณารักษ์ด้านบน เช่น เมื่อขึ้นปีการศึกษาใหม่</div></div>`}
+    </section>
+    <section class="panel"><div class="panel-h"><h2>ประวัติการแก้ไข</h2><div class="seg" role="group" aria-label="กรองประวัติ" style="max-width:300px"><button type="button" data-logf="" aria-pressed="${!onlyPerm}">ทั้งหมด</button><button type="button" data-logf="perm" aria-pressed="${onlyPerm}">เฉพาะสิทธิ์ผู้ใช้</button></div></div>
+      <table class="tbl" style="margin-top:8px"><tbody>${logs.map(a => `<tr><td class="small" style="white-space:nowrap">${thShort(a.t)} ${hhmm(a.t)}</td><td class="small">${esc(a.who)}</td><td class="small">${a.perm ? '<span class="pill ref">สิทธิ์</span> ' : ''}${esc(a.what)}</td></tr>`).join('') || '<tr><td class="small muted">ยังไม่มีการเปลี่ยนสิทธิ์</td></tr>'}</tbody></table></section>
+    ${protoSwitch()}`,
+    mount(root) {
+      $('[data-addt]').addEventListener('click', () => addTeacherDialog());
+      $('[data-adda]').addEventListener('click', addAssistantDialog);
+      $$('[data-edit]', root).forEach(b => b.addEventListener('click', () => editStaffDialog(SID_STAFF(b.dataset.edit))));
+      $$('[data-revoke]', root).forEach(b => b.addEventListener('click', () => revokeStaffDialog(SID_STAFF(b.dataset.revoke))));
+      $$('[data-restore]', root).forEach(b => b.addEventListener('click', () => { const s = SID_STAFF(b.dataset.restore); Object.assign(s, { active: true, admin: false }); permLog(`คืนสิทธิ์การเข้าใช้ให้ ${s.name} (${JOB[s.job]} ไม่รวมสิทธิ์ผู้ดูแล)`); toast(`คืนสิทธิ์ ${s.name} แล้ว`); refresh(); }));
+      $$('[data-accept]', root).forEach(b => b.addEventListener('click', () => { const s = SID_STAFF(b.dataset.accept); s.invited = false; S.audit.unshift({ t: now(), who: s.name, what: `ยืนยันอีเมลและเริ่มใช้งาน${s.admin ? ' สิทธิ์ผู้ดูแลระดับโรงเรียนมีผลแล้ว' : ''}`, perm: true }); toast(`${s.name} ยืนยันอีเมลแล้ว`); refresh(); }));
+      $$('[data-rma]', root).forEach(b => b.addEventListener('click', () => removeAssistantDialog([b.dataset.rma], 'ยกเลิกสิทธิ์ยุวบรรณารักษ์')));
+      $('[data-g6]', root)?.addEventListener('click', () => removeAssistantDialog(g6, 'ยกเลิกสิทธิ์ยุวบรรณารักษ์ ม.6 ที่จบการศึกษา'));
+      $$('[data-logf]', root).forEach(b => b.addEventListener('click', () => { history.replaceState(null, '', '#/t/admin/users' + (b.dataset.logf ? '?log=perm' : '')); refresh(); }));
+      mountProtoSwitch(root);
+    }
+  };
+}
+
+/* ---------- Admin: ส่งมอบงาน (โอนสิทธิ์ + ตรวจร่าง + ส่งออกข้อมูล ในที่เดียว) ---------- */
+const HANDOVER_FILES = [['items', 'ทรัพยากรสารสนเทศ (CSV)'], ['marc', 'ระเบียนบรรณานุกรม (MARCXML)'], ['students', 'รายชื่อนักเรียน (CSV)'], ['loans', 'การยืมที่ยังไม่คืน (CSV)']];
+function tHandover() {
+  const me = SID_STAFF(S.me), H = S.handover || (S.handover = {});
+  if (H.done && H.from === S.me) {
+    return { title: 'ส่งมอบงาน', body: `<section class="panel"><div class="msg ok saved" role="status"><div><b>ส่งมอบงานเรียบร้อย</b>&nbsp;${thDate(H.at)} เวลา ${hhmm(H.at)}</div></div>
+      <dl class="kv" style="margin-top:14px"><dt>ผู้ดูแลระดับโรงเรียน</dt><dd>${H.to.map(esc).join(', ')}</dd><dt>บัญชีของคุณ</dt><dd>${H.choice === 'leave' ? 'ยกเลิกสิทธิ์การเข้าใช้แล้ว ระบบจริงจะออกจากระบบทันที' : H.choice === 'stepdown' ? `ยังใช้งานได้ในฐานะ${JOB[me.job]} ไม่มีสิทธิ์ผู้ดูแลแล้ว` : 'ยังเป็นผู้ดูแลร่วม'}</dd>
+      <dt>ร่างค้าง</dt><dd>${S.drafts.length ? `${S.drafts.length} รายการ ฝากผู้ดูแลคนใหม่ตรวจต่อ` : 'ไม่มี'}</dd><dt>ไฟล์ที่ส่งออก</dt><dd>${HANDOVER_FILES.filter(([k]) => S.exported[k]).length} จาก ${HANDOVER_FILES.length} ไฟล์</dd>${H.note ? `<dt>บันทึกส่งมอบ</dt><dd>${esc(H.note)}</dd>` : ''}</dl>
+      <p class="small muted" style="margin-top:12px">ผู้ดูแลคนใหม่จะเห็นบันทึกส่งมอบนี้ในหน้า "วันนี้" ทุกขั้นตอนบันทึกในประวัติการแก้ไขแล้ว</p>${protoSwitch()}</section>`, mount: mountProtoSwitch };
+  }
+  const others = liveAdmins().filter(a => a.id !== S.me), waiting = STAFF.filter(a => a.active && a.admin && a.invited);
+  const cands = STAFF.filter(s => s.active && !s.invited && !s.admin && s.job !== 'exec' && s.id !== S.me);
+  const ok1 = others.length > 0, ok2 = !S.drafts.length || H.passDrafts, nX = HANDOVER_FILES.filter(([k]) => S.exported[k]).length, ok3 = nX === HANDOVER_FILES.length;
+  const choice = H.choice || 'leave';
+  const st = (ok, must) => ok ? '<span class="pill ok">เสร็จแล้ว</span>' : must ? '<span class="pill late">ต้องทำก่อน</span>' : '<span class="pill ref">แนะนำ</span>';
+  const pend = [!ok2 && 'ตรวจร่างที่ค้างอยู่', !ok3 && 'ส่งออกข้อมูลเก็บไว้'].filter(Boolean);
+  return {
+    title: 'ส่งมอบงาน',
+    body: `<p class="muted" style="margin-bottom:16px">ใช้เมื่อ${esc(me.name)} จะย้าย เกษียณ หรือเปลี่ยนหน้าที่ ทำ 4 ขั้นในหน้านี้ให้ครบ ข้อมูลของห้องสมุดอยู่ครบทั้งหมด ไม่มีอะไรถูกลบ</p>
+    <ol class="hand">
+      <li class="panel"><div class="panel-h"><h2>1. แต่งตั้งผู้ดูแลคนใหม่</h2>${st(ok1, true)}</div>
+        ${others.length ? `<p class="small" style="margin:6px 0">ผู้ดูแลที่จะทำงานต่อ: <b>${others.map(a => esc(a.name)).join(', ')}</b></p>` : '<p class="small muted" style="margin:6px 0">ยังไม่มีผู้ดูแลคนอื่นที่ใช้งานได้ ถ้าส่งมอบตอนนี้ โรงเรียนจะไม่มีใครตั้งค่าระบบต่อได้</p>'}
+        ${waiting.length ? `<div class="msg warn" role="status"><div>${waiting.map(a => esc(a.name)).join(', ')} ได้รับแต่งตั้งแล้วแต่ยังไม่ยืนยันอีเมล จึงยังนับเป็นผู้ดูแลไม่ได้ ให้ครูเปิดอีเมลเชิญแล้วกดยืนยัน</div></div>` : ''}
+        <div class="row wrap" style="gap:8px;margin-top:10px">${cands.length ? `<label class="field" style="margin:0;min-width:240px"><span class="sr">เลือกครู</span><select class="input" data-pick>${cands.map(s => `<option value="${s.id}">${esc(s.name)} · ${JOB[s.job]}</option>`).join('')}</select></label><button type="button" class="btn" data-appoint>แต่งตั้งเป็นผู้ดูแล</button>` : ''}<button type="button" class="btn ghost" data-newt>เพิ่มครูใหม่แล้วแต่งตั้ง</button></div>
+      </li>
+      <li class="panel"><div class="panel-h"><h2>2. ตรวจร่างที่ค้างอยู่</h2>${st(ok2)}</div>
+        ${S.drafts.length ? `<p class="small muted" style="margin:6px 0">ร่างการลงรายการจากยุวบรรณารักษ์ ${S.drafts.length} รายการ</p><table class="tbl"><tbody>${S.drafts.map(d => `<tr><td class="t">${esc(shortTitle(d.t))}</td><td class="small muted">โดย ${esc(SBY[d.by] ? SBY[d.by].first : '')}</td><td class="num"><button type="button" class="btn sm" data-draft="${d.id}">ตรวจ</button></td></tr>`).join('')}</tbody></table>
+          <label class="row small" style="margin-top:8px"><input type="checkbox" data-pass ${H.passDrafts ? 'checked' : ''}> ฝากร่างที่เหลือให้ผู้ดูแลคนใหม่ตรวจต่อ</label>` : '<p class="small muted" style="margin:6px 0">ไม่มีร่างค้าง</p>'}
+      </li>
+      <li class="panel"><div class="panel-h"><h2>3. ส่งออกข้อมูลเก็บไว้</h2>${st(ok3)}</div>
+        <p class="small muted" style="margin:6px 0">สำเนาสำรองไว้กับโรงเรียน เผื่อใช้ตรวจสอบหรือย้ายระบบ ระบบยังสำรองข้อมูลทุกคืนตามปกติ</p>
+        <ul class="small" style="margin:0 0 10px 20px">${HANDOVER_FILES.map(([k, l]) => `<li>${S.exported[k] ? '&#10003; ' : ''}${l}${S.exported[k] ? ` <span class="muted">ดาวน์โหลดแล้ว ${hhmm(S.exported[k])}</span>` : ''}</li>`).join('')}</ul>
+        <button type="button" class="btn" data-xall>${ICON.export}ดาวน์โหลดชุดส่งมอบ ${HANDOVER_FILES.length} ไฟล์</button>
+      </li>
+      <li class="panel"><div class="panel-h"><h2>4. ยืนยันการส่งมอบ</h2></div>
+        <label class="field" style="margin-top:8px"><span>บันทึกถึงผู้ดูแลคนใหม่ (ถ้ามี)</span><textarea class="input" data-note rows="3" placeholder="เช่น หนังสือบริจาคจากศิษย์เก่ายังไม่ได้ลงรายการ อยู่ในกล่องหลังเคาน์เตอร์">${esc(H.note || '')}</textarea></label>
+        <fieldset style="border:0;padding:0;margin:10px 0 0"><legend class="small" style="margin-bottom:6px">หลังส่งมอบ บัญชีของฉัน</legend>
+          ${[['leave', 'ยกเลิกสิทธิ์ทั้งหมด (ย้ายโรงเรียน เกษียณ หรือลาออก)'], ['stepdown', `ใช้งานต่อในฐานะ${JOB[me.job]} แต่ยกเลิกสิทธิ์ผู้ดูแล`], ['keep', 'คงสิทธิ์ผู้ดูแลไว้ เป็นผู้ดูแลร่วม']].map(([v, l]) => `<label class="row small" style="margin:4px 0"><input type="radio" name="hchoice" value="${v}" ${choice === v ? 'checked' : ''}> ${l}</label>`).join('')}
+        </fieldset>
+        ${ok1 && pend.length ? `<div class="msg warn" role="status" style="margin-top:12px"><div>ยังไม่ได้${pend.join(' และ')} ส่งมอบได้ แต่แนะนำให้ทำก่อน</div></div>` : ''}
+        ${!ok1 ? `<div class="msg err" role="alert" style="margin-top:12px"><div>${NO_ADMIN_MSG}</div></div>` : ''}
+        <div class="row" style="justify-content:flex-end;margin-top:14px"><button type="button" class="btn primary" data-confirm ${ok1 ? '' : 'disabled'}>ยืนยันการส่งมอบงาน</button></div>
+      </li>
+    </ol>`,
+    mount(root) {
+      const saveNote = () => { H.note = $('[data-note]', root).value.trim(); H.choice = ($('[name=hchoice]:checked', root) || {}).value || 'leave'; };
+      $('[data-note]', root).addEventListener('input', saveNote);
+      $$('[name=hchoice]', root).forEach(r => r.addEventListener('change', saveNote));
+      $('[data-appoint]', root)?.addEventListener('click', () => { const s = SID_STAFF($('[data-pick]', root).value); s.admin = true; permLog(`แต่งตั้ง ${s.name} เป็นผู้ดูแลระดับโรงเรียน (ขั้นตอนส่งมอบงาน)`); toast(`แต่งตั้ง ${s.name} เป็นผู้ดูแลแล้ว`); saveNote(); refresh(); });
+      $('[data-newt]', root).addEventListener('click', () => { saveNote(); addTeacherDialog(true); });
+      $$('[data-draft]', root).forEach(b => b.addEventListener('click', () => { saveNote(); draftDialog(S.drafts.find(d => d.id === b.dataset.draft)); }));
+      $('[data-pass]', root)?.addEventListener('change', e => { H.passDrafts = e.target.checked; saveNote(); refresh(); });
+      $('[data-xall]', root).addEventListener('click', () => { saveNote(); HANDOVER_FILES.forEach(([k]) => { S.exported[k] = now(); exportFile(k, true); }); permLog(`ส่งออกชุดส่งมอบงาน ${HANDOVER_FILES.length} ไฟล์`); toast(`ดาวน์โหลดชุดส่งมอบ ${HANDOVER_FILES.length} ไฟล์แล้ว`); refresh(); });
+      $('[data-confirm]', root)?.addEventListener('click', () => {
+        saveNote(); if (!liveAdmins().some(a => a.id !== S.me)) return refresh();
+        const to = liveAdmins().filter(a => a.id !== S.me).map(a => a.name);
+        permLog(`ส่งมอบงานให้ ${to.join(', ')}${S.drafts.length ? ` ฝากร่างค้าง ${S.drafts.length} รายการ` : ''}${H.note ? ` บันทึก: "${H.note.slice(0, 60)}${H.note.length > 60 ? '…' : ''}"` : ''}`);
+        if (H.choice === 'leave') { permLog(`ยกเลิกสิทธิ์การเข้าใช้ของ ${me.name} (ส่งมอบงาน)`); Object.assign(me, { active: false, admin: false, revokedAt: now(), why: 'ส่งมอบงาน' }); }
+        if (H.choice === 'stepdown') { permLog(`ยกเลิกสิทธิ์ผู้ดูแลระดับโรงเรียนของ ${me.name} (ส่งมอบงาน)`); me.admin = false; }
+        Object.assign(H, { done: true, from: S.me, at: now(), to }); refresh();
+      });
     }
   };
 }
@@ -313,17 +493,18 @@ function tExport() {
       <table class="tbl"><tbody>${items.map(([k, t, d, f]) => `<tr><td><div class="t">${t}</div><div class="small muted">${d}</div></td><td><span class="pill ref">${f}</span></td><td class="num"><button class="btn sm" data-x="${k}">${ICON.export}ดาวน์โหลด</button></td></tr>`).join('')}</tbody></table></section>
     <section class="panel"><h2>สำรองข้อมูลอัตโนมัติ</h2><p class="muted" style="margin-top:6px">ระบบสำรองข้อมูลทุกคืน ครั้งล่าสุด ${thDate(TODAY)} เวลา 02:00 น. เก็บย้อนหลัง 30 วัน</p></section>`,
     mount(root) {
-      $$('[data-x]', root).forEach(b => b.addEventListener('click', () => {
-        const k = b.dataset.x;
-        if (k === 'items') return exportItems();
-        if (k === 'marc') { download(`punarn-marc-${ymd}.xml`, marcxml(), 'application/xml'); return toast(`ส่งออกระเบียน ${BOOKS.length} รายการเป็น MARCXML แล้ว`); }
-        if (k === 'students') download(`punarn-students-${ymd}.csv`, toCSV([['รหัสประจำตัว', 'คำนำหน้า', 'ชื่อ', 'นามสกุล', 'ชื่อเล่น', 'ชั้น', 'ห้อง', 'เพศ'], ...STUDENTS.map(s => [s.id, s.pre, s.first, s.last, s.nick, 'ม.' + s.g, s.room, s.f ? 'หญิง' : 'ชาย'])]));
-        if (k === 'loans') download(`punarn-loans-${ymd}.csv`, toCSV([['เลขทะเบียน', 'ชื่อเรื่อง', 'รหัสนักเรียน', 'ชื่อ', 'ชั้น', 'วันที่ยืม', 'กำหนดคืน'], ...S.loans.map(l => [l.bc, BY[l.bc].t, l.sid, fullName(SBY[l.sid]), cls(SBY[l.sid]), thDate(l.out), thDate(l.due)])]));
-        if (k === 'visits') download(`punarn-visits-${ymd}.csv`, toCSV([['เวลา', 'รหัสนักเรียน', 'ชั้น', 'เพศ'], ...todayVisits().map(v => [hhmm(v.t), v.sid, cls(SBY[v.sid]), SBY[v.sid].f ? 'หญิง' : 'ชาย'])]));
-        toast('ดาวน์โหลดแล้ว');
-      }));
+      $$('[data-x]', root).forEach(b => b.addEventListener('click', () => { S.exported[b.dataset.x] = now(); exportFile(b.dataset.x); }));
     }
   };
+}
+function exportFile(k, quiet) {
+  const ymd = `${TODAY.getFullYear() + 543}${String(TODAY.getMonth() + 1).padStart(2, '0')}${String(TODAY.getDate()).padStart(2, '0')}`;
+  if (k === 'items') return exportItems(quiet);
+  if (k === 'marc') { download(`punarn-marc-${ymd}.xml`, marcxml(), 'application/xml'); return quiet || toast(`ส่งออกระเบียน ${BOOKS.length} รายการเป็น MARCXML แล้ว`); }
+  if (k === 'students') download(`punarn-students-${ymd}.csv`, toCSV([['รหัสประจำตัว', 'คำนำหน้า', 'ชื่อ', 'นามสกุล', 'ชื่อเล่น', 'ชั้น', 'ห้อง', 'เพศ'], ...STUDENTS.map(s => [s.id, s.pre, s.first, s.last, s.nick, 'ม.' + s.g, s.room, s.f ? 'หญิง' : 'ชาย'])]));
+  if (k === 'loans') download(`punarn-loans-${ymd}.csv`, toCSV([['เลขทะเบียน', 'ชื่อเรื่อง', 'รหัสนักเรียน', 'ชื่อ', 'ชั้น', 'วันที่ยืม', 'กำหนดคืน'], ...S.loans.map(l => [l.bc, BY[l.bc].t, l.sid, fullName(SBY[l.sid]), cls(SBY[l.sid]), thDate(l.out), thDate(l.due)])]));
+  if (k === 'visits') download(`punarn-visits-${ymd}.csv`, toCSV([['เวลา', 'รหัสนักเรียน', 'ชั้น', 'เพศ'], ...todayVisits().map(v => [hhmm(v.t), v.sid, cls(SBY[v.sid]), SBY[v.sid].f ? 'หญิง' : 'ชาย'])]));
+  quiet || toast('ดาวน์โหลดแล้ว');
 }
 
 /* ---------- Help / manual (FR-M11-05, FR-M11-04) ---------- */
@@ -492,7 +673,7 @@ function tTop(q) {
       <h2>เข้าใช้ห้องสมุดบ่อยที่สุด 10 อันดับ</h2>${rank(tv, 'ครั้ง', sumV)}
       <h2>ยืมหนังสือมากที่สุด 10 อันดับ</h2>${rank(tl, 'เล่ม', sumL)}
       <p class="small muted" style="margin-top:14px">นับจากการบันทึกเข้าใช้ที่ kiosk และรายการยืมที่เคาน์เตอร์ นักเรียนที่ไม่เคยใช้บริการในช่วงนี้ไม่ปรากฏในตาราง</p>
-      <div class="row sig" style="justify-content:space-around;margin-top:40px;text-align:center"><div>ลงชื่อ ........................................<br>(ครูวิไลวรรณ ทองคำ)<br>ครูผู้รับผิดชอบห้องสมุด</div></div>
+      <div class="row sig" style="justify-content:space-around;margin-top:40px;text-align:center"><div>ลงชื่อ ........................................<br>(........................................)<br>ครูผู้รับผิดชอบห้องสมุด</div></div>
     </article>`;
   return {
     title: 'นักเรียนที่ใช้บริการมากที่สุด',

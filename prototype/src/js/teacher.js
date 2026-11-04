@@ -1,12 +1,12 @@
 /* ================= Teacher / student assistant (desktop) ================= */
 const isA = () => S.role === 'assistant';
 const base = () => isA() ? '#/a/' : '#/t/';
-const ME = () => isA() ? { name: fullName(SBY['43105']), sub: cls(SBY['43105']), badge: 'ยุวบรรณารักษ์' } : { name: 'ครูวิไลวรรณ ทองคำ', sub: 'ครูผู้รับผิดชอบห้องสมุด', badge: 'ผู้ดูแลระดับโรงเรียน' };
+const ME = () => { if (isA()) return { name: fullName(SBY['43105']), sub: cls(SBY['43105']), badge: 'ยุวบรรณารักษ์' }; const s = SID_STAFF(S.me) || STAFF[0]; return { name: s.name, sub: JOB[s.job], badge: s.admin ? 'ผู้ดูแลระดับโรงเรียน' : JOB[s.job] }; };
 function tNav() {
   if (isA()) return [{ items: [['circ', 'ยืม-คืน', 'circ'], ['catalog', 'ลงหนังสือใหม่ (ร่าง)', 'catalog'], ['#/k', 'เปิด kiosk', 'kiosk'], ['help', 'คู่มือยุวบรรณารักษ์', 'help']] }];
   return [
     { items: [['today', 'วันนี้', 'today'], ['circ', 'ยืม-คืน', 'circ'], ['catalog', 'ลงหนังสือใหม่', 'catalog'], ['labels', 'พิมพ์เลขเรียกหนังสือและบาร์โค้ด', 'labels'], ['items', 'ทรัพยากรสารสนเทศ', 'items'], ['visits', 'การเข้าใช้พื้นที่', 'visits'], ['reports', 'รายงาน', 'report'], ['top', 'นักเรียนที่ใช้บริการมากที่สุด', 'users'], ['#/k', 'เปิด kiosk', 'kiosk']] },
-    { grp: 'ตั้งค่าโรงเรียน', items: [['admin/import', 'นำเข้านักเรียน', 'import'], ['admin/users', 'ผู้ใช้และสิทธิ์', 'users'], ['admin/settings', 'ตั้งค่าโรงเรียน', 'settings'], ['admin/export', 'ส่งออกข้อมูล', 'export']] },
+    ...(canAdmin() ? [{ grp: 'ตั้งค่าโรงเรียน', items: [['admin/import', 'นำเข้านักเรียน', 'import'], ['admin/users', 'ผู้ใช้และสิทธิ์', 'users'], ['admin/settings', 'ตั้งค่าโรงเรียน', 'settings'], ['admin/export', 'ส่งออกข้อมูล', 'export'], ['admin/handover', 'ส่งมอบงาน', 'circ']] }] : []),
     { grp: 'ช่วยเหลือ', items: [['help', 'คู่มือการใช้งาน', 'help']] }
   ];
 }
@@ -28,7 +28,11 @@ function viewTeacher(p, q) {
   if (isA() && !['circ', 'catalog', 'help'].includes(page)) {
     return { title: 'ไม่มีสิทธิ์', html: tShell('', 'หน้านี้สำหรับครู', `<div class="panel"><h2>หน้านี้สำหรับครูผู้รับผิดชอบห้องสมุด</h2><p class="muted" style="margin-top:6px">ยุวบรรณารักษ์ใช้ได้เฉพาะยืม-คืน ลงรายการเป็นร่าง และเปิด kiosk</p><p style="margin-top:16px"><a class="btn primary" href="#/a/circ">ไปหน้ายืม-คืน</a></p></div>`) };
   }
-  const V = { today: tToday, circ: tCirc, catalog: tCatalog, labels: tLabels, items: tItems, visits: tVisits, reports: tReports, top: tTop, 'admin/import': tImport, 'admin/users': tUsers, 'admin/settings': tSettings, 'admin/export': tExport, help: tHelp }[page];
+  if (page.startsWith('admin/') && !canAdmin()) {
+    const ad = liveAdmins();
+    return { title: 'ไม่มีสิทธิ์', html: tShell('', 'หน้านี้สำหรับผู้ดูแลระดับโรงเรียน', `<div class="panel"><h2>หน้านี้สำหรับผู้ดูแลระดับโรงเรียน</h2><p class="muted" style="margin-top:6px">บัญชีของคุณยังใช้งานยืม-คืน ลงรายการ และรายงานได้ตามปกติ ถ้าต้องการแก้การตั้งค่าโรงเรียนหรือสิทธิ์ผู้ใช้ ติดต่อผู้ดูแล ${ad.length} คนนี้</p><ul style="margin:10px 0 0 20px">${ad.map(a => `<li>${esc(a.name)} <span class="small muted">${esc(a.email)}</span></li>`).join('')}</ul>${protoSwitch()}</div>`), mount: mountProtoSwitch };
+  }
+  const V = { today: tToday, circ: tCirc, catalog: tCatalog, labels: tLabels, items: tItems, visits: tVisits, reports: tReports, top: tTop, 'admin/import': tImport, 'admin/users': tUsers, 'admin/settings': tSettings, 'admin/export': tExport, 'admin/handover': tHandover, help: tHelp }[page];
   if (!V) return { html: tShell('', 'ไม่พบหน้านี้', `<div class="panel"><p>ไม่พบหน้าที่ต้องการ</p><p style="margin-top:12px"><a class="btn" href="${base()}${isA() ? 'circ' : 'today'}">กลับหน้าแรก</a></p></div>`) };
   const v = V(q);
   return { title: v.title, html: tShell(page, v.title, v.body, v.actions || ''), mount: v.mount };
@@ -44,7 +48,8 @@ function tToday() {
   return {
     title: 'วันนี้',
     actions: `<span class="small muted">${thDay(TODAY)}</span>`,
-    body: `<p class="muted">สวัสดี ครูวิไลวรรณ</p>
+    body: `<p class="muted">สวัสดี ${esc(ME().name.split(' ')[0])}</p>
+    ${S.handover && S.handover.done && S.handover.from !== S.me && canAdmin() ? `<section class="panel handnote" aria-labelledby="hn-h"><h2 id="hn-h">บันทึกส่งมอบงานจาก ${esc(SID_STAFF(S.handover.from).name)}</h2><p class="small muted">${thDate(S.handover.at)}</p>${S.handover.note ? `<p style="margin-top:8px">${esc(S.handover.note)}</p>` : ''}<p class="small" style="margin-top:8px">${S.drafts.length ? `มีร่างฝากตรวจ ${S.drafts.length} รายการ ด้านล่าง` : 'ไม่มีร่างค้าง'} · <a href="#/t/admin/users">ดูผู้ใช้และสิทธิ์</a></p></section>` : ''}
     <p class="today-lead" style="margin-top:4px">วันนี้มีนักเรียนเข้าห้องสมุดแล้ว <b>${v}&nbsp;คน</b> ยืมหนังสือไป <b>${b}&nbsp;เล่ม</b> รับคืน <b>${r}&nbsp;เล่ม</b> ${od.length ? `และมีหนังสือเกินกำหนดคืน <b class="warn">${od.length}&nbsp;เล่ม</b>` : 'และไม่มีหนังสือเกินกำหนดคืน'}</p>
     <div class="tools">
       ${tool('#/t/circ', 'circ', 'ยืม-คืน', 'สแกนบัตร แล้วสแกนหนังสือ', 'F2')}
@@ -97,7 +102,7 @@ function draftDialog(d) {
     <div class="acts"><button class="btn" data-back>ส่งกลับให้แก้ไข</button><button class="btn primary" data-ok>อนุมัติและเพิ่มเข้าห้องสมุด</button></div>`, dlg => {
     $('[data-ok]', dlg).addEventListener('click', () => {
       const b = bookFromRecord(d, {}); S.labelQueue.push(b.bc); S.drafts = S.drafts.filter(x => x !== d);
-      S.audit.unshift({ t: now(), who: 'ครูวิไลวรรณ ทองคำ', what: `อนุมัติร่าง "${shortTitle(d.t)}" เลขทะเบียน ${b.bc}` });
+      S.audit.unshift({ t: now(), who: ME().name, what: `อนุมัติร่าง "${shortTitle(d.t)}" เลขทะเบียน ${b.bc}` });
       closeDialog(); toast(`อนุมัติแล้ว เลขทะเบียน ${b.bc} รอพิมพ์ป้าย`); refresh();
     });
     $('[data-back]', dlg).addEventListener('click', () => { S.drafts = S.drafts.filter(x => x !== d); closeDialog(); toast(`ส่งร่างกลับให้ ${SBY[d.by].first} แก้ไขแล้ว`); refresh(); });
