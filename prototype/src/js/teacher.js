@@ -112,7 +112,7 @@ function draftDialog(d) {
 /* ---------- Circulation (FR-M3-01..04, NFR-02, NFR-05) ---------- */
 function tCirc() {
   const C = S.circ || (S.circ = { mode: 'borrow', patron: null, basket: [], msg: null, returned: [], sub: 'borrow', sret: [] });
-  C.sub = C.sub || 'borrow'; C.sret = C.sret || [];
+  C.sub = C.sub || 'borrow'; C.sret = C.sret || []; C.over = C.over || [];
   return {
     title: 'ยืม-คืน',
     body: `<div class="tabs" role="tablist" aria-label="เลือกงาน">
@@ -198,7 +198,7 @@ function tCirc() {
           return draw();
         }
         if (!C.patron) {
-          if (st) { C.patron = val; C.sret = []; C.sub = 'borrow'; C.msg = null; }
+          if (st) { C.patron = val; C.sret = []; C.over = []; C.sub = 'borrow'; C.msg = null; }
           else if (b) C.msg = { k: 'warn', h: `${esc(val)} เป็นเลขทะเบียนหนังสือ สแกนบัตรนักเรียนก่อน แล้วจึงสแกนหนังสือ` };
           else C.msg = { k: 'err', h: `ไม่พบรหัสนักเรียน ${esc(val)} ในโรงเรียนนี้ ตรวจรหัสบนบัตรอีกครั้ง` };
           return draw();
@@ -211,13 +211,17 @@ function tCirc() {
           else returnMine(val);
           return draw();
         }
-        if (st && !b) { if (C.basket.length) C.msg = { k: 'warn', h: `ยังไม่ได้บันทึกการยืมของ ${esc(me.first)} กดบันทึกหรือยกเลิกก่อนเปลี่ยนผู้ยืม` }; else { C.patron = val; C.sret = []; C.sub = 'borrow'; C.msg = null; } return draw(); }
+        if (st && !b) { if (C.basket.length) C.msg = { k: 'warn', h: `ยังไม่ได้บันทึกการยืมของ ${esc(me.first)} กดบันทึกหรือยกเลิกก่อนเปลี่ยนผู้ยืม` }; else { C.patron = val; C.sret = []; C.over = []; C.sub = 'borrow'; C.msg = null; } return draw(); }
         if (!b) C.msg = { k: 'err', h: `ไม่พบเลขทะเบียน ${esc(val)} ในห้องสมุดนี้ ตรวจเลขบนบาร์โค้ดอีกครั้ง` };
         else if (C.basket.includes(val)) C.msg = { k: 'warn', h: `${esc(shortTitle(b.t))} อยู่ในรายการแล้ว` };
         else if (b.s === 'out') { const l = loanOf(val), who = SBY[l.sid]; C.msg = { k: 'warn', h: `<b>${esc(shortTitle(b.t))} ยังมีรายการยืมค้างอยู่</b> ยืมโดย ${esc(isA() ? who.first + ' ' + cls(who) : fullName(who) + ' ' + cls(who))} ถ้าหนังสืออยู่ที่เคาน์เตอร์ แปลว่ายังไม่ได้รับคืนในระบบ`, act: ['รับคืนเล่มนี้ แล้วยืมต่อ', () => { doReturn(val); scan(val); if (C.basket.includes(val)) { C.msg = { k: 'ok', h: `รับคืน ${esc(shortTitle(b.t))} แล้ว และเพิ่มในรายการยืม` }; draw(); } }] }; }
         else if (b.s !== 'on') C.msg = { k: 'err', h: b.s === 'ref' ? `${esc(shortTitle(b.t))} เป็นหนังสืออ้างอิง อ่านในห้องสมุดเท่านั้น ยืมออกไม่ได้` : `${esc(shortTitle(b.t))} มีสถานะ "${STATUS[b.s]}" แก้สถานะในหน้าทรัพยากรก่อนให้ยืม` };
         else if (S.policy.block && loansOf(me.id).some(l => diffDays(l.due, TODAY) < 0)) C.msg = { k: 'err', h: 'นักเรียนมีหนังสือเกินกำหนด ต้องคืนก่อนจึงยืมใหม่ได้ (ตั้งค่าได้ที่ ตั้งค่าโรงเรียน)' };
-        else if (quota(me) <= 0) C.msg = { k: 'err', h: `ยืมได้สูงสุด ${S.policy.max} เล่ม ตอนนี้ ${esc(me.first)} ยืมอยู่ ${loansOf(me.id).length} เล่ม และอยู่ในรายการ ${C.basket.length} เล่ม` };
+        else if (quota(me) <= 0) {
+          const held = loansOf(me.id).length, od = loansOf(me.id).filter(l => diffDays(l.due, TODAY) < 0).length;
+          C.msg = { k: 'err', h: `<b>นักเรียนรหัส ${me.id} มีหนังสือค้างอยู่ ${held} เล่ม</b>${od ? ` (เกินกำหนด ${od} เล่ม)` : ''}${C.basket.length ? ` และอยู่ในรายการยืมรอบนี้อีก ${C.basket.length} เล่ม` : ''} ครบจำนวนที่ยืมได้สูงสุด ${S.policy.max} เล่มแล้ว ถ้าจำเป็นต้องให้ยืม กดยืนยัน ระบบจะบันทึกชื่อผู้อนุมัติไว้ในประวัติ`,
+            act: ['ยืนยันให้ยืมเกินจำนวนสูงสุด', () => { C.basket.push(val); C.over.push(val); C.msg = { k: 'warn', h: `เพิ่ม <b>${esc(shortTitle(b.t))}</b> เกินจำนวนสูงสุดแล้ว รวม ${held + C.basket.length} เล่ม จะบันทึกในประวัติเมื่อกดเสร็จสิ้น` }; draw(); $('#scan', panel)?.focus(); }] };
+        }
         else { C.basket.push(val); C.msg = null; }
         draw();
       }
@@ -228,17 +232,19 @@ function tCirc() {
       function finish() {
         const me = SBY[C.patron], due = nextSchoolDay(addDays(TODAY, S.policy.days)), nB = C.basket.length, nR = C.sret.length;
         C.basket.forEach(bc => { S.loans.push({ bc, sid: me.id, out: now(), due }); BY[bc].s = 'out'; S.log.push({ type: 'borrow', bc, sid: me.id, t: now(), live: true }); enqueue({ type: 'borrow', bc }); });
-        const fine = fineTotal(me.id), parts = [nB && `ยืม ${nB} เล่ม คืนภายใน ${thDate(due)}`, nR && `คืน ${nR} เล่ม`].filter(Boolean);
+        const nO = C.over.filter(bc => C.basket.includes(bc)).length;
+        if (nO) S.audit.unshift({ t: now(), who: ME().name, what: `อนุมัติให้ยืมเกินจำนวนสูงสุด ${nO} เล่ม แก่นักเรียนรหัส ${me.id} ${cls(me)} รวมยืมอยู่ ${loansOf(me.id).length} เล่ม (สูงสุด ${S.policy.max})` });
+        const fine = fineTotal(me.id), parts = [nB && `ยืม ${nB} เล่ม${nO ? ` (เกินจำนวนสูงสุด ${nO} เล่ม)` : ''} คืนภายใน ${thDate(due)}`, nR && `คืน ${nR} เล่ม`].filter(Boolean);
         C.msg = { k: 'ok', h: `<b>เสร็จสิ้น ${esc(me.first)} ${cls(me)}</b>&nbsp;${parts.length ? parts.join(' และ ') : 'ไม่มีรายการยืมหรือคืน'}${!isA() && fine ? ` · ค่าปรับค้างชำระ ${fine} บาท` : ''}${S.offline ? ' (เก็บไว้ในเครื่อง รอส่ง)' : ''}` };
-        C.patron = null; C.basket = []; C.sret = []; C.sub = 'borrow'; refresh();
+        C.patron = null; C.basket = []; C.sret = []; C.over = []; C.sub = 'borrow'; refresh();
       }
       const save = finish;
       function bind() {
         const inp = $('#scan', panel);
         $('[data-scan]', panel).addEventListener('submit', e => { e.preventDefault(); const v = inp.value; inp.value = ''; scan(v); $('#scan', panel)?.focus(); });
         $$('[data-try]', panel).forEach(b => b.addEventListener('click', () => { scan(b.dataset.try); $('#scan', panel)?.focus(); }));
-        $$('[data-rm]', panel).forEach(b => b.addEventListener('click', () => { C.basket = C.basket.filter(x => x !== b.dataset.rm); draw(); $('#scan', panel).focus(); }));
-        $('[data-cancel]', panel)?.addEventListener('click', () => { const nR = C.sret.length; C.patron = null; C.basket = []; C.sret = []; C.sub = 'borrow'; C.msg = nR ? { k: 'warn', h: `ยกเลิกรายการยืมแล้ว ส่วนการคืน ${nR} เล่มบันทึกไปแล้วตั้งแต่ตอนสแกน` } : null; draw(); $('#scan', panel).focus(); });
+        $$('[data-rm]', panel).forEach(b => b.addEventListener('click', () => { C.basket = C.basket.filter(x => x !== b.dataset.rm); C.over = C.over.filter(x => x !== b.dataset.rm); draw(); $('#scan', panel).focus(); }));
+        $('[data-cancel]', panel)?.addEventListener('click', () => { const nR = C.sret.length; C.patron = null; C.basket = []; C.sret = []; C.over = []; C.sub = 'borrow'; C.msg = nR ? { k: 'warn', h: `ยกเลิกรายการยืมแล้ว ส่วนการคืน ${nR} เล่มบันทึกไปแล้วตั้งแต่ตอนสแกน` } : null; draw(); $('#scan', panel).focus(); });
         $('[data-done]', panel)?.addEventListener('click', finish);
         $$('[data-sub]', panel).forEach(b => b.addEventListener('click', () => { C.sub = b.dataset.sub; C.msg = null; draw(); $('#scan', panel)?.focus(); }));
         $$('[data-ret]', panel).forEach(b => b.addEventListener('click', () => { returnMine(b.dataset.ret); draw(); $('#scan', panel)?.focus(); }));
