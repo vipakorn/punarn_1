@@ -58,7 +58,48 @@ const TYPE_GROUP = {
 };
 const TYPE_LABEL = { text: 'หนังสือเรียนและคู่มือ', exam: 'หนังสือเตรียมสอบ', lit: 'วรรณกรรมและนวนิยาย', nf: 'สารคดีและความรู้ทั่วไป', comic: 'การ์ตูนความรู้', ref: 'หนังสืออ้างอิง' };
 const STATUS = { on: 'อยู่บนชั้น', out: 'ถูกยืม', ref: 'อ่านในห้องสมุดเท่านั้น', repair: 'ส่งซ่อม', lost: 'สูญหาย', gone: 'จำหน่ายออก' };
-const norm = s => String(s || '').toLowerCase().normalize('NFC');
+/* การทำให้คำค้นเป็นรูปมาตรฐาน: ตัวพิมพ์เล็ก ตัดเครื่องหมายกำกับเสียงของอักษรละติน (é → e, ö → o)
+   ตัดอะพอสทรอฟี (Charlotte's → charlottes) และเปลี่ยนวรรคตอนเป็นช่องว่าง (J.K. → j k)
+   ช่วง U+0300–036F ไม่รวมสระและวรรณยุกต์ไทย จึงไม่กระทบการค้นภาษาไทย */
+const norm = s => String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').normalize('NFC')
+  .replace(/['’‘`]/g, '').replace(/[.,:;!?"“”()[\]/\\=–—-]+/g, ' ').replace(/\s+/g, ' ').trim();
+/* ระเบียนควบคุมของหนังสือแปล ตามเขตข้อมูล MARC 21
+   l = 041 $h ภาษาต้นฉบับ, u = 240 ชื่อเรื่องแบบฉบับ (ชื่อต้นฉบับ ตัดคำนำหน้านามตามหลัก RDA),
+   v = 246 ชื่อเรื่องที่แตกต่าง, n = 700 ชื่อบุคคลรูปแบบควบคุม (นามสกุล, ชื่อ) */
+const ORIG_LANG = { eng: 'อังกฤษ', ger: 'เยอรมัน', fre: 'ฝรั่งเศส', por: 'โปรตุเกส', nor: 'นอร์เวย์', jpn: 'ญี่ปุ่น', kor: 'เกาหลี', grc: 'กรีกโบราณ' };
+const AUTH = {
+  '1000005': { l: 'eng', u: 'Thinking, fast and slow', n: ['Kahneman, Daniel'] },
+  '1000006': { l: 'eng', u: 'Mindset', v: ['Mindset : the new psychology of success'], n: ['Dweck, Carol S.'] },
+  '1000008': { l: 'eng', u: '7 habits of highly effective teens', v: ['The 7 habits of highly effective teens', 'Seven habits of highly effective teens'], n: ['Covey, Sean'] },
+  '1000009': { l: 'eng', u: 'Atomic habits', n: ['Clear, James'] },
+  '1000017': { l: 'eng', u: 'Guns, germs, and steel', v: ['Guns, germs, and steel : the fates of human societies'], n: ['Diamond, Jared'] },
+  '1000018': { l: 'eng', u: 'Factfulness', v: ["Factfulness : ten reasons we're wrong about the world - and why things are better than you think"], n: ['Rosling, Hans', 'Rosling, Ola', 'Rosling Rönnlund, Anna'] },
+  '1000021': { l: 'eng', u: 'History of the world in 47 borders', v: ['A history of the world in 47 borders'], n: ['Elledge, Jonn'] },
+  '1000022': { l: 'eng', u: 'Rich dad, poor dad', n: ['Kiyosaki, Robert T.'] },
+  '1000026': { l: 'kor' }, '1000095': { l: 'kor' }, '1000096': { l: 'kor' }, '1000190': { l: 'kor' },
+  '1000034': { l: 'grc', u: "Aesop's fables", n: ['Aesop'] },
+  '1000080': { l: 'eng', u: 'Brief history of time', v: ['A brief history of time'], n: ['Hawking, Stephen'] },
+  '1000118': { l: 'eng', u: 'Anne of Green Gables', n: ['Montgomery, L. M.'] },
+  '1000119': { l: 'eng', u: "Charlotte's web", n: ['White, E. B.'] },
+  '1000120': { l: 'eng', u: 'Little house in the big woods', n: ['Wilder, Laura Ingalls'] },
+  '1000121': { l: 'eng', u: 'Old man and the sea', v: ['The old man and the sea'], n: ['Hemingway, Ernest'] },
+  '1000137': { l: 'eng', u: 'Hunger games', v: ['The hunger games'], n: ['Collins, Suzanne'] },
+  '1000138': { l: 'eng', u: 'Wonder', n: ['Palacio, R. J.'] },
+  '1000147': { l: 'eng', u: 'Nineteen eighty-four', v: ['1984'], n: ['Orwell, George'] },
+  '1000152': { l: 'eng', u: "Harry Potter and the philosopher's stone", v: ["Harry Potter and the sorcerer's stone"], n: ['Rowling, J. K.'] },
+  '1000155': { l: 'eng', u: 'Boy in the striped pyjamas', v: ['The boy in the striped pyjamas', 'The boy in the striped pajamas'], n: ['Boyne, John'] },
+  '1000156': { l: 'ger', u: 'Momo', n: ['Ende, Michael'] },
+  '1000157': { l: 'ger', u: 'Pilger Kamanita', v: ['Der Pilger Kamanita', 'The pilgrim Kamanita'], n: ['Gjellerup, Karl'] },
+  '1000158': { l: 'nor', u: 'Sofies verden', v: ["Sophie's world"], n: ['Gaarder, Jostein'] },
+  '1000159': { l: 'fre', u: 'Petit prince', v: ['Le petit prince', 'The little prince'], n: ['Saint-Exupéry, Antoine de'] },
+  '1000160': { l: 'por', u: 'Alquimista', v: ['O alquimista', 'The alchemist'], n: ['Coelho, Paulo'] },
+  '1000162': { l: 'jpn', u: 'Madogiwa no Totto-chan', v: ['Totto-chan : the little girl at the window'], n: ['Kuroyanagi, Tetsuko'] },
+  '1000188': { l: 'eng', u: 'Sapiens', v: ['Sapiens : a brief history of humankind'], n: ['Harari, Yuval Noah'] },
+  '1000197': { l: 'eng', u: 'History of Thailand', v: ['A history of Thailand'], n: ['Baker, Chris', 'Pasuk Phongpaichit'] },
+  '1000199': { l: 'eng', u: 'History of Ayutthaya', v: ['A history of Ayutthaya : Siam in the early modern world'], n: ['Baker, Chris', 'Pasuk Phongpaichit'] }
+};
+/* ชื่อบุคคลรูปแบบควบคุม "Kahneman, Daniel" → ลำดับปกติ "Daniel Kahneman" */
+const directName = n => n.includes(', ') ? n.split(', ').slice(1).join(' ') + ' ' + n.split(', ')[0] : n;
 /* --- ข้อมูลการจัดหาจำลอง (FR-M2-03: แหล่งที่มา ราคา) --- */
 const ACQ_PRICE = { text: [120, 260], exam: [180, 360], lit: [150, 330], nf: [200, 480], comic: [120, 210], ref: [420, 1200] };
 const FUNDS = [['เงินอุดหนุนรายหัว', 0.40], ['เงินรายได้สถานศึกษา', 0.22], ['โครงการเรียนฟรี 15 ปี', 0.20], ['รับบริจาค', 0.18]];
@@ -89,7 +130,12 @@ function prepBook(b) {
   b.exam = b.exam || [];
   const h = hash(b.bc) % 40;
   b.pop = h + (b.g === 'exam' ? 26 : b.g === 'comic' ? 22 : b.type === 'วรรณกรรมแปล' ? 16 : b.g === 'lit' ? 8 : 0);
-  b._idx = norm([b.t, b.a, b.p, b.subj, b.isbn, b.call, b.sub, b.exam.join(' '), b.type, b.bc, b.ed, b.note].join(' '));
+  const au = AUTH[b.bc];
+  if (au) { b.ol = au.l; b.ut = au.u || ''; b.vt = au.v || []; b.an = au.n || []; } else { b.vt = b.vt || []; b.an = b.an || []; }
+  /* ดัชนีแยก: ชื่อเรื่องต้นฉบับ (240/246) และชื่อผู้แต่งอักษรโรมัน (700) ทั้งรูปควบคุมและลำดับปกติ */
+  b._oidx = norm([b.ut, ...b.vt, ...b.an, ...b.an.map(directName)].join(' '));
+  if (b._oidx) b._oidx += ' ' + b._oidx.replace(/\b(\w) (?=\w\b)/g, '$1'); /* อักษรย่อติดกัน: "j k rowling" → "jk rowling" */
+  b._idx = norm([b.t, b.a, b.p, b.subj, b.isbn, b.call, b.sub, b.exam.join(' '), b.type, b.bc, b.ed, b.note].join(' ')) + ' ' + b._oidx;
   if (!b.acq) genAcq(b);
   return b;
 }

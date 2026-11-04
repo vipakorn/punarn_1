@@ -11,8 +11,12 @@ function sec(h, list, more) {
   if (!list.length) return '';
   return `<section class="sec"><div class="sec-h"><h2>${h}</h2>${more ? `<a href="${more}">ดูทั้งหมด</a>` : ''}</div>${shelf(list, h)}</section>`;
 }
-function resultRow(b) {
-  return `<a class="result" href="#/s/book/${b.bc}">${cover(b)}<div><h3>${esc(b.t)}</h3><div class="meta">${esc(b.a)} พ.ศ. ${b.ybe}</div>${statusPill(b, true)}</div>${spine(b.call, 'sm')}</a>`;
+function resultRow(b, q) {
+  /* ถ้าคำค้นตรงกับชื่อต้นฉบับหรือชื่อผู้แต่งอักษรโรมันเท่านั้น บอกเหตุผลที่หนังสือภาษาไทยเล่มนี้ขึ้นมา */
+  const tk = norm(q).split(' ').filter(Boolean), main = norm(b.t + ' ' + b.a);
+  const why = tk.length && b._oidx && !tk.every(x => main.includes(x)) && tk.some(x => b._oidx.includes(x))
+    ? `<div class="meta orig">ฉบับแปลของ <i>${esc([b.ut, ...b.vt].filter(Boolean).find(x => tk.every(k => norm(x).includes(k))) || b.ut || b.vt[0] || '')}</i>${b.an.length ? ` โดย ${esc(b.an.map(directName).join(', '))}` : ''}</div>` : '';
+  return `<a class="result" href="#/s/book/${b.bc}">${cover(b)}<div><h3>${esc(b.t)}</h3><div class="meta">${esc(b.a)} พ.ศ. ${b.ybe}</div>${why}${statusPill(b, true)}</div>${spine(b.call, 'sm')}</a>`;
 }
 function sNav(tab) {
   const n = S.student ? overdueOf(S.student).length : 0;
@@ -107,19 +111,19 @@ function sSearch(q) {
     <div id="res" aria-live="polite"></div>`, 'search'),
     mount(root) {
       const res = $('#res', root), form = $('[data-sform]', root), ff = $('[data-filters]', root);
-      const read = () => { const o = { q: form.q.value.trim() }; new FormData(ff).forEach((v, k) => { if (v) o[k] = v; }); return o; };
+      const read = () => { const o = { q: form.elements.q.value.trim() }; new FormData(ff).forEach((v, k) => { if (v) o[k] = v; }); return o; };
       const draw = () => {
         const o = read(); const list = filterBooks(o);
         const qs = new URLSearchParams(Object.entries(o).filter(([, v]) => v)).toString();
         history.replaceState(null, '', '#/s/search' + (qs ? '?' + qs : ''));
         const anyFilter = Object.keys(o).some(k => k !== 'q' && o[k]);
         res.innerHTML = list.length
-          ? `<p class="small muted" style="padding:0 16px 6px">พบ ${list.length} เล่ม${o.q ? ` สำหรับ “${esc(o.q)}”` : ''}</p>${list.slice(0, 60).map(resultRow).join('')}${list.length > 60 ? `<p class="small muted" style="padding:14px 16px">แสดง 60 เล่มแรก พิมพ์คำค้นเพิ่มเพื่อให้แคบลง</p>` : ''}`
+          ? `<p class="small muted" style="padding:0 16px 6px">พบ ${list.length} เล่ม${o.q ? ` สำหรับ “${esc(o.q)}”` : ''}</p>${list.slice(0, 60).map(b => resultRow(b, o.q)).join('')}${list.length > 60 ? `<p class="small muted" style="padding:14px 16px">แสดง 60 เล่มแรก พิมพ์คำค้นเพิ่มเพื่อให้แคบลง</p>` : ''}`
           : `<div class="empty"><h2>ไม่พบหนังสือที่ตรงกับ “${esc(o.q)}”</h2><p>ลองใช้คำที่สั้นลง ค้นด้วยชื่อผู้แต่ง หรือ${anyFilter ? 'ล้างตัวกรองด้านบน' : 'เลือกจากหัวข้อด้านล่าง'}</p>
              <div class="subjects" style="margin-top:14px">${['นิยาย', 'คณิตศาสตร์', 'ภาษาอังกฤษ', 'ประวัติศาสตร์', 'วิทยาศาสตร์'].map(t => `<a class="chip" href="#/s/search?q=${encodeURIComponent(t)}">${t}</a>`).join('')}</div></div>`;
       };
-      form.addEventListener('submit', e => { e.preventDefault(); form.q.blur(); draw(); });
-      form.q.addEventListener('input', () => { clearTimeout(form._t); form._t = setTimeout(draw, 160); });
+      form.addEventListener('submit', e => { e.preventDefault(); form.elements.q.blur(); draw(); });
+      form.elements.q.addEventListener('input', () => { clearTimeout(form._t); form._t = setTimeout(draw, 160); });
       ff.addEventListener('change', draw);
       draw();
     }
@@ -138,7 +142,7 @@ function sBook(bc) {
   else if (b.s === 'out' && l) { const d = diffDays(l.due, TODAY); state = `<p class="small" style="margin-top:6px">${d < 0 ? 'ผู้ยืมยังไม่ได้นำมาคืน' : `กำหนดคืน ${thDate(l.due)}`}</p>`; }
   else if (b.s === 'ref') state = `<p class="small" style="margin-top:6px">หนังสืออ้างอิง อ่านได้ในห้องสมุด ยืมออกไม่ได้</p>`;
   else state = '';
-  const kv = [['ผู้แต่ง', b.a], ['สำนักพิมพ์', b.p], ['ปีที่พิมพ์', b.lang === 'อังกฤษ' ? `พ.ศ. ${b.ybe} (ค.ศ. ${b.yce})` : `พ.ศ. ${b.ybe}`], ['ฉบับพิมพ์', b.ed], ['จำนวนหน้า', b.pg ? b.pg + ' หน้า' : ''], ['ภาษา', b.lang], ['เหมาะกับ', b.lvl], ['ISBN', b.isbn], ['เลขทะเบียน', b.bc]]
+  const kv = [['ผู้แต่ง', b.a], ['ชื่อเรื่องต้นฉบับ', b.ut ? `${b.ut} (ภาษา${ORIG_LANG[b.ol] || ''})` : b.ol ? `แปลจากภาษา${ORIG_LANG[b.ol]}` : ''], ['ชื่อเรื่องอื่น', b.vt.join(' / ')], ['ผู้แต่งอักษรโรมัน', b.an.map(directName).join(', ')], ['สำนักพิมพ์', b.p], ['ปีที่พิมพ์', b.lang === 'อังกฤษ' ? `พ.ศ. ${b.ybe} (ค.ศ. ${b.yce})` : `พ.ศ. ${b.ybe}`], ['ฉบับพิมพ์', b.ed], ['จำนวนหน้า', b.pg ? b.pg + ' หน้า' : ''], ['ภาษา', b.lang], ['เหมาะกับ', b.lvl], ['ISBN', b.isbn], ['เลขทะเบียน', b.bc]]
     .filter(([, v]) => v).map(([k, v]) => `<dt>${k}</dt><dd>${esc(v)}</dd>`).join('');
   const subj = String(b.subj || '').split(';').map(s => s.trim()).filter(Boolean);
   return {

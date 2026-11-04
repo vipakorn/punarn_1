@@ -23,7 +23,7 @@ function tItems() {
         const opt = b => b.s === 'out' ? statusPill(b) : `<label class="sr" for="st-${b.bc}">สถานะของ ${esc(shortTitle(b.t))}</label><select class="input" id="st-${b.bc}" data-st="${b.bc}" style="min-height:36px;padding:4px 8px;width:auto">${Object.entries(STATUS).filter(([k]) => k !== 'out').map(([k, v]) => `<option value="${k}" ${b.s === k ? 'selected' : ''}>${v}</option>`).join('')}</select>`;
         box.innerHTML = `<p class="small muted" style="padding:8px 0">แสดง ${Math.min(F.n, list.length)} จาก ${list.length} รายการ (ทั้งห้องสมุด ${BOOKS.length} เล่ม) · กดชื่อเรื่องเพื่อดูโครงสร้างข้อมูล Dublin Core</p>
           <table class="tbl"><thead><tr><th></th><th>ชื่อเรื่อง</th><th>เลขเรียกหนังสือ</th><th>เลขทะเบียน</th><th>มุมจัดเก็บ</th><th>สถานะ</th></tr></thead><tbody>
-          ${list.slice(0, F.n).map(b => `<tr><td>${cover(b)}</td><td><button type="button" class="linkbtn dc-link" data-dc="${b.bc}">${esc(shortTitle(b.t))}</button><div class="small muted">${esc(b.a)}</div></td><td class="num">${esc(b.call)}</td><td class="num">${b.bc}</td><td class="small">${esc(b.loc)}</td><td>${opt(b)}</td></tr>`).join('')}</tbody></table>
+          ${list.slice(0, F.n).map(b => `<tr><td>${cover(b)}</td><td><button type="button" class="linkbtn dc-link" data-dc="${b.bc}">${esc(shortTitle(b.t))}</button><div class="small muted">${esc(b.a)}</div>${b.ut ? `<div class="small muted">ต้นฉบับ: <i>${esc(b.ut)}</i>${b.an.length ? ` · ${esc(b.an.map(directName).join(', '))}` : ''}</div>` : ''}</td><td class="num">${esc(b.call)}</td><td class="num">${b.bc}</td><td class="small">${esc(b.loc)}</td><td>${opt(b)}</td></tr>`).join('')}</tbody></table>
           ${list.length > F.n ? `<p style="padding:12px 0"><button class="btn sm" data-more>แสดงเพิ่มอีก 30 รายการ</button></p>` : ''}`;
         $('[data-more]', box)?.addEventListener('click', () => { F.n += 30; draw(); });
         $$('[data-dc]', box).forEach(a => a.addEventListener('click', () => dcDialog(a.dataset.dc)));
@@ -473,9 +473,11 @@ function marcxml() {
   const sf = (c, v) => v ? `<subfield code="${c}">${x(v)}</subfield>` : '';
   const df = (tag, i1, i2, inner) => inner ? `\n  <datafield tag="${tag}" ind1="${i1}" ind2="${i2}">${inner}</datafield>` : '';
   return `<?xml version="1.0" encoding="UTF-8"?>\n<collection xmlns="http://www.loc.gov/MARC21/slim">` + BOOKS.map(b => `\n<record>\n  <leader>00000nam a2200000 a 4500</leader>\n  <controlfield tag="001">${b.bc}</controlfield>`
-    + df('020', ' ', ' ', sf('a', b.isbn)) + df('082', '0', '4', sf('a', b.ddc)) + df('100', '1', ' ', sf('a', String(b.a).split(',')[0]))
-    + df('245', '1', '0', sf('a', b.t)) + df('250', ' ', ' ', sf('a', b.ed)) + df('264', ' ', '1', sf('b', b.p) + sf('c', b.y)) + df('300', ' ', ' ', sf('a', b.pg ? b.pg + ' p.' : ''))
+    + df('020', ' ', ' ', sf('a', b.isbn)) + df('041', b.ol ? '1' : '0', ' ', b.ol ? sf('a', 'tha') + sf('h', b.ol) : '') + df('082', '0', '4', sf('a', b.ddc)) + df('100', '1', ' ', sf('a', String(b.a).split(',')[0]))
+    + df('240', '1', '0', b.ut ? sf('a', b.ut) + sf('l', 'Thai') : '') + df('245', '1', '0', sf('a', b.t))
+    + b.vt.map(v => df('246', '1', ' ', sf('a', v))).join('') + df('250', ' ', ' ', sf('a', b.ed)) + df('264', ' ', '1', sf('b', b.p) + sf('c', b.y)) + df('300', ' ', ' ', sf('a', b.pg ? b.pg + ' p.' : ''))
     + String(b.subj || '').split(';').filter(s => s.trim()).map(s => df('650', ' ', '4', sf('a', s.trim()))).join('')
+    + b.an.map(n => df('700', n.includes(', ') ? '1' : '0', ' ', sf('a', n))).join('')
     + df('852', ' ', ' ', sf('b', b.loc) + sf('h', b.call) + sf('p', b.bc)) + '\n</record>').join('') + '\n</collection>\n';
 }
 function tExport() {
@@ -552,8 +554,8 @@ const DC_TYPE = b => b.g === 'comic' ? 'Image, Text' : 'Text';
 function dcRecord(b) {
   const subj = String(b.subj || '').split(';').map(s => s.trim()).filter(Boolean);
   return [
-    ['title', 'ชื่อเรื่อง', [b.t], 'ชื่อเรื่อง'],
-    ['creator', 'ผู้รับผิดชอบหลัก', String(b.a || '').split(/ และ |;| & /).map(s => s.trim()).filter(Boolean), 'ผู้แต่ง'],
+    ['title', 'ชื่อเรื่อง', [b.t, b.ut, ...b.vt].filter(Boolean), b.ut ? 'ชื่อเรื่อง, ชื่อต้นฉบับ (240), ชื่อเรื่องอื่น (246)' : 'ชื่อเรื่อง'],
+    ['creator', 'ผู้รับผิดชอบหลัก', [...String(b.a || '').split(/ และ |;| & /).map(s => s.trim()).filter(Boolean), ...b.an.map(directName)], b.an.length ? 'ผู้แต่ง, ชื่ออักษรโรมัน (700)' : 'ผู้แต่ง'],
     ['subject', 'หัวเรื่องและเลขหมู่', [...subj, b.ddc ? `${b.ddc} (DDC)` : ''].filter(Boolean), 'หัวเรื่อง, เลขหมู่ DDC'],
     ['description', 'คำอธิบาย', [b.note || b.sub || ''].filter(Boolean), 'หมายเหตุ (ยังไม่ได้เก็บ)'],
     ['publisher', 'สำนักพิมพ์', [b.p].filter(Boolean), 'สำนักพิมพ์'],
@@ -564,7 +566,7 @@ function dcRecord(b) {
     ['identifier', 'ตัวระบุ', [`เลขทะเบียน ${b.bc}`, b.isbn ? `ISBN ${b.isbn}` : '', b.call ? `เลขเรียก ${b.call}` : ''].filter(Boolean), 'เลขทะเบียน, ISBN, เลขเรียกหนังสือ'],
     ['source', 'แหล่งที่มาของระเบียน', [b.src ? (String(b.src).startsWith('o:') ? `Open Library ${String(b.src).slice(2)}` : b.src) : 'ลงรายการเอง'], 'แหล่งที่คัดลอกระเบียน'],
     ['language', 'ภาษา', [`${DC_LANG[b.lang] || 'und'} (${b.lang || 'ไม่ระบุ'})`], 'ภาษา'],
-    ['relation', 'ความสัมพันธ์กับทรัพยากรอื่น', [], 'ยังไม่ได้เก็บ'],
+    ['relation', 'ความสัมพันธ์กับทรัพยากรอื่น', b.ol ? [`แปลจาก${b.ut ? ` ${b.ut}` : ''} (ภาษา${ORIG_LANG[b.ol]})`] : [], b.ol ? 'ภาษาต้นฉบับ (041) และชื่อต้นฉบับ (240)' : 'ยังไม่ได้เก็บ'],
     ['coverage', 'ขอบเขตด้านเวลาหรือสถานที่', [], 'ยังไม่ได้เก็บ'],
     ['rights', 'สิทธิ์', [`ลิขสิทธิ์ของ ${b.p || 'ผู้จัดพิมพ์'} ให้บริการยืมภายในห้องสมุดโรงเรียน`], 'ไม่ได้เก็บ ใช้ข้อความมาตรฐาน']
   ];
