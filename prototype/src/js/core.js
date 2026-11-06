@@ -271,7 +271,7 @@ const todayLog = type => S.log.filter(x => x.type === type && diffDays(x.t, TODA
 
 /* ---------- union catalog (simulated shared records, real books) ---------- */
 const UNION = [
-  { isbn: '9789744723635', t: 'แฮร์รี่ พอตเตอร์กับห้องแห่งความลับ', ed: '', a: 'เจ. เค. โรว์ลิง', p: 'นานมีบุ๊คส์', y: '2544', pg: '', lang: 'ไทย', type: 'วรรณกรรมแปล', cls: '800 วรรณคดี/วรรณกรรม', ddc: '823.914', subj: 'นวนิยายอังกฤษ -- แปลเป็นภาษาไทย; แฮร์รี่ พอตเตอร์ (ตัวละคร)', lvl: 'ม.1-6', cv: 'o|6900538', src: 'o:Open Library', used: 31 },
+  { isbn: '9789744723635', vol: '2', t: 'แฮร์รี่ พอตเตอร์กับห้องแห่งความลับ', ed: '', a: 'เจ. เค. โรว์ลิง', p: 'นานมีบุ๊คส์', y: '2544', pg: '', lang: 'ไทย', type: 'วรรณกรรมแปล', cls: '800 วรรณคดี/วรรณกรรม', ddc: '823.914', subj: 'นวนิยายอังกฤษ -- แปลเป็นภาษาไทย; แฮร์รี่ พอตเตอร์ (ตัวละคร)', lvl: 'ม.1-6', cv: 'o|6900538', src: 'o:Open Library', used: 31 },
   { isbn: '9780761169253', t: 'Steal Like an Artist : 10 things nobody told you about being creative', ed: '', a: 'Austin Kleon', p: 'Workman Publishing', y: '2012', pg: '160', lang: 'อังกฤษ', type: 'สารคดี/ความรู้ทั่วไป', cls: '100 ปรัชญาและจิตวิทยา', ddc: '153.35', subj: 'Creative ability; Creation (Literary, artistic, etc.)', lvl: 'ม.4-6', cv: 'o|7284187', src: 'o:OL16489931W', used: 4 },
   { isbn: '9781861976772', t: 'Eats, Shoots & Leaves : the zero tolerance approach to punctuation', ed: '', a: 'Lynne Truss', p: 'Profile Books', y: '2005', pg: '209', lang: 'อังกฤษ', type: 'สารคดี/ความรู้ทั่วไป', cls: '400 ภาษาศาสตร์', ddc: '428.2', subj: 'English language -- Punctuation', lvl: 'ม.4-6', cv: 'o|8567974', src: 'o:OL2793678W', used: 2 }
 ];
@@ -298,6 +298,27 @@ function authorMark(a) {
   return '';
 }
 const callNo = (ddc, a, t) => [ddc, authorMark(a), titleMark(t)].filter(Boolean).join(' ');
+/* เลขเรียกหนังสือต้องไม่ซ้ำระหว่างหนังสือต่างเรื่อง ส่วนฉบับซ้ำของเรื่องเดียวกัน (ISBN หรือชื่อเรื่องเดียวกัน) ใช้เลขเดียวกัน
+   ถ้าทุกเล่มในกลุ่มมีเลขเล่ม (MARC 490 $v หรือ "เล่ม/ภาค/Vol. N" ในชื่อเรื่อง) เติม ล.N ไม่อย่างนั้นเติมปีพิมพ์ */
+const VOL_RE = /(?:เล่ม|ภาค|ล\.|vol\.?|volume|book)\s*(\d+)/i;
+const volOf = r => String(r.vol || (String(r.t || '').match(VOL_RE) || [])[1] || '');
+const sameWork = (x, y) => (x.isbn && x.isbn === y.isbn) || norm(x.t) === norm(y.t);
+const baseCall = c => String(c || '').replace(/\s(?:ล\.\d+|\d{4})[ก-ฮ]?$/, '');
+function resolveCall(call, rec) {
+  const copy = BOOKS.find(b => sameWork(b, rec));
+  if (copy) return { call: copy.call, relabel: [], copyOf: copy };
+  const base = baseCall(call), group = BOOKS.filter(b => baseCall(b.call) === base);
+  if (!group.length) return { call, relabel: [] };
+  const useVol = [...group, rec].every(x => volOf(x)), sfx = x => useVol ? 'ล.' + volOf(x) : String(x.y || '').trim();
+  let mine = call !== base ? call : `${base} ${sfx(rec)}`, n = 0;
+  while (BOOKS.some(b => b.call === mine)) mine = `${base} ${sfx(rec)}${'กขคงจ'[n++]}`;
+  return { call: mine, relabel: group.filter(b => b.call === base).map(b => ({ b, call: `${base} ${sfx(b)}` })), useVol };
+}
+function relabelBook(b, call, because) {
+  const old = b.call; b.call = call; prepBook(b);
+  if (!S.labelQueue.includes(b.bc)) S.labelQueue.push(b.bc);
+  S.audit.unshift({ t: now(), who: (SID_STAFF(S.me) || {}).name || 'ระบบ', what: `เปลี่ยนเลขเรียกของ "${shortTitle(b.t)}" เลขทะเบียน ${b.bc} จาก ${old} เป็น ${call} เพราะซ้ำกับ "${shortTitle(because)}" ต้องพิมพ์ป้ายสันใหม่` });
+}
 const DDC_CLASS = { 0: '000 เบ็ดเตล็ด/ความรู้ทั่วไป', 1: '100 ปรัชญาและจิตวิทยา', 2: '200 ศาสนา', 3: '300 สังคมศาสตร์', 4: '400 ภาษาศาสตร์', 5: '500 วิทยาศาสตร์', 6: '600 เทคโนโลยี/วิทยาศาสตร์ประยุกต์', 7: '700 ศิลปะและนันทนาการ', 8: '800 วรรณคดี/วรรณกรรม', 9: '900 ประวัติศาสตร์และภูมิศาสตร์' };
 const LOCS = ['มุมหนังสือเรียนและเตรียมสอบ (ชั้น 2)', 'มุมหนังสือภาษาอังกฤษ (ชั้น 2)', 'มุมวรรณกรรม (ชั้น 1)', 'ชั้นหนังสือทั่วไป (ชั้น 1)', 'มุมการ์ตูนความรู้ (ชั้น 1)', 'มุมหนังสืออ้างอิง (ชั้น 1)'];
 function locFor(type, lang) {

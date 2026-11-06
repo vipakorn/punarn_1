@@ -91,6 +91,9 @@ function tToday() {
 }
 function bookFromRecord(r, item) {
   const bc = item.bc || nextBarcode();
+  const rc = resolveCall(item.call || r.call || callNo(r.ddc, r.a, r.t), r);
+  rc.relabel.forEach(x => relabelBook(x.b, x.call, r.t));
+  item = { ...item, call: rc.call };
   return addBook({ bc, isbn: r.isbn || '', t: r.t, ed: r.ed || '', a: r.a || '', p: r.p || '', y: r.y || '', pg: item.pg || r.pg || '', lang: r.lang || 'ไทย', type: r.type, cls: r.cls || DDC_CLASS[String(r.ddc)[0]], ddc: r.ddc, call: item.call || r.call || callNo(r.ddc, r.a, r.t), subj: r.subj || '', lvl: r.lvl || 'ม.1-6', loc: item.loc || r.loc || locFor(r.type, r.lang), st: 'พร้อมให้ยืม', cv: r.cv || '', src: r.src || '', note: item.note || '', s: 'on' });
 }
 function draftDialog(d) {
@@ -460,9 +463,13 @@ function tCatalog() {
         return true;
       }
       function draw3() {
-        const r = K.rec, bc = nextBarcode(), call = callNo(r.ddc, r.a, r.t), loc = locFor(r.type, r.lang);
+        const r = K.rec, bc = nextBarcode(), rc = resolveCall(callNo(r.ddc, r.a, r.t), r), call = rc.call, loc = locFor(r.type, r.lang);
+        const callNote = rc.copyOf ? `<div class="msg ok" role="status"><div>ใช้เลขเรียกเดียวกับเล่มที่มีอยู่ (${esc(rc.copyOf.call)}) เพราะเป็นหนังสือเรื่องเดียวกัน</div></div>`
+          : rc.relabel.length ? `<div class="msg warn" role="status"><div><b>เลขเรียกซ้ำกับหนังสือเรื่องอื่น</b> ระบบเติม${rc.useVol ? 'เลขเล่ม' : 'ปีพิมพ์'}ให้ทุกเล่มเพื่อแยกบนชั้น เล่มนี้ใช้ <b>${esc(call)}</b> และจะเปลี่ยนเล่มเดิม ${rc.relabel.map(x => `"${esc(shortTitle(x.b.t))}" เป็น <b>${esc(x.call)}</b>`).join(', ')} พร้อมเพิ่มป้ายสันใหม่ในคิวพิมพ์</div></div>`
+          : call !== callNo(r.ddc, r.a, r.t) ? `<div class="msg warn" role="status"><div>เติม${/ล\.\d/.test(call) ? 'เลขเล่ม' : 'ปีพิมพ์'}ในเลขเรียกเป็น <b>${esc(call)}</b> เพราะมีหนังสือเรื่องอื่นในชุดเดียวกันบนชั้นแล้ว</div></div>` : '';
         W.innerHTML = `${stepper()}<h2>ข้อมูลของเล่มนี้</h2>
           <div class="row" style="margin:12px 0 16px">${spine(call, 'sm')}<div><div style="font-weight:500">${esc(shortTitle(r.t))}</div><div class="small muted">${esc(r.a)}</div></div></div>
+          ${callNote}
           <form class="grid2" data-f3>
             <label class="field"><span>เลขทะเบียน (บาร์โค้ด) ${info('เลขประจำตัวของหนังสือเล่มนี้ ระบบออกเลขถัดไปให้ และพิมพ์เป็นบาร์โค้ดติดหนังสือ')}</span><input class="input num" name="bc" value="${bc}" inputmode="numeric"></label>
             <label class="field"><span>เลขเรียกหนังสือ (call number) ${info('เลขหมู่ ตามด้วยอักษรผู้แต่งและอักษรชื่อเรื่อง พิมพ์บนป้ายสันหนังสือ ใช้หาหนังสือบนชั้น')}</span><input class="input" name="call" value="${esc(call)}"></label>
@@ -476,7 +483,10 @@ function tCatalog() {
           ${A ? '<button class="btn primary" data-draft>ส่งร่างให้ครูตรวจ</button>' : '<button class="btn" data-next>บันทึกและลงเล่มต่อไป</button><button class="btn primary" data-print>บันทึกและพิมพ์ป้าย</button>'}</div>`;
         const f3 = $('[data-f3]', W);
         $('[data-back]', W).addEventListener('click', () => { K.step = 2; draw(); });
-        const collect = () => { const d = Object.fromEntries(new FormData(f3)); if (BY[d.bc]) { K.msg = { k: 'err', h: `เลขทะเบียน ${esc(d.bc)} มีอยู่แล้ว ใช้เลข ${nextBarcode()} แทน` }; draw3(); return null; } return d; };
+        const collect = () => { const d = Object.fromEntries(new FormData(f3)); if (BY[d.bc]) { K.msg = { k: 'err', h: `เลขทะเบียน ${esc(d.bc)} มีอยู่แล้ว ใช้เลข ${nextBarcode()} แทน` }; draw3(); return null; }
+          const other = BOOKS.find(b => b.call === d.call.trim() && !sameWork(b, r));
+          if (other) { K.msg = { k: 'err', h: `เลขเรียก ${esc(d.call)} ซ้ำกับ "${esc(shortTitle(other.t))}" (เลขทะเบียน ${other.bc}) เติมเลขเล่ม เช่น ล.2 หรือปีพิมพ์ต่อท้ายเพื่อแยกบนชั้น` }; draw3(); return null; }
+          return d; };
         const save = after => {
           const d = collect(); if (!d) return;
           const b = bookFromRecord(r, d); S.labelQueue.push(b.bc);
