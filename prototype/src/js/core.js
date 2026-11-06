@@ -473,7 +473,7 @@ const enqueue = what => { if (S.offline) S.queue.push(what); };
 /* ---------- prototype bar ---------- */
 function renderProtobar() {
   let pb = $('.protobar');
-  if (!pb) { pb = document.createElement('div'); pb.className = 'protobar noprint'; document.body.appendChild(pb); }
+  if (!pb) { pb = document.createElement('div'); pb.className = 'protobar noprint'; document.body.prepend(pb); }
   const open = pb.dataset.open === '1';
   pb.innerHTML = `<button type="button" aria-expanded="${open}" aria-controls="pb-menu"><span class="dot"></span><span class="pb-long">ต้นแบบ: เปลี่ยนบทบาท</span><span class="pb-short">ต้นแบบ</span></button>
   ${open ? `<div class="menu" id="pb-menu">
