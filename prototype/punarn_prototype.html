@@ -466,6 +466,7 @@ function render(keepFocus) {
   else if (parts[0] === 'k') v = viewKiosk(q);
   else if (parts[0] === 't' || parts[0] === 'a') { S.role = parts[0] === 'a' ? 'assistant' : 'teacher'; v = viewTeacher(parts.slice(1), q); }
   else if (parts[0] === 'e') v = parts[1] === 'budget' ? viewExecBudget(q) : viewExec(q);
+  else if (parts[0] === 'guide') v = viewGuide();
   else v = viewLaunch();
   document.body.dataset.view = parts[0] || 'home';
   app.innerHTML = v.html;
@@ -567,7 +568,7 @@ function viewLaunch() {
     html: `<main class="launch">
     <div class="brand">${brand()}</div>
     <h1>ต้นแบบระบบห้องสมุดโรงเรียนปันอ่าน</h1>
-    <p class="lead">ลองใช้ระบบในฐานะผู้ใช้แต่ละกลุ่มของ${esc(SCHOOL.name)} (โรงเรียนสมมติ) หนังสือทั้ง 200 เล่มเป็นหนังสือจริงพร้อมภาพปก วันที่ในต้นแบบคือ${thDay(TODAY)} เวลา 10:42 น.</p>
+    <p class="lead">ลองใช้ระบบในฐานะผู้ใช้แต่ละกลุ่มของ${esc(SCHOOL.name)} (โรงเรียนสมมติ) หนังสือทั้ง 200 เล่มเป็นหนังสือจริงพร้อมภาพปก วันที่ในต้นแบบคือ${thDay(TODAY)} เวลา ${hhmm(DEMO)} น.</p>
     <div class="roles">
       ${role('#/s', 'student', ICON.home, 'นักเรียน', 'ค้นหนังสือ ดูว่าอยู่ชั้นไหน มุมเตรียมสอบ และหนังสือที่ยืมอยู่', 'มือถือ', 'ลองทำ: หาหนังสือเตรียมสอบ A-Level ฟิสิกส์ แล้วดูว่าอยู่ที่ไหน')}
       ${role('#/k', '', ICON.kiosk, 'Kiosk ทางเข้าห้องสมุด', 'นักเรียนสแกนบัตรหรือพิมพ์รหัสเพื่อบันทึกการเข้าใช้', 'แท็บเล็ตแนวนอน', 'ลองทำ: พิมพ์รหัส 41208 แล้วกดตกลง')}
@@ -576,7 +577,22 @@ function viewLaunch() {
       ${role('#/e', '', ICON.report, 'ผู้บริหารโรงเรียน', 'แนวโน้มการเข้าใช้และการยืมย้อนหลัง 4 ภาคเรียน', 'คอมพิวเตอร์', 'ลองทำ: ดูว่านักเรียน ม.ปลายเข้าห้องสมุดช่วงไหนมากที่สุด')}
       <div class="role about"><span class="ico">${ICON.info}</span><span><span class="dev">ข้อมูลในต้นแบบ</span><h2>มีอะไรบ้าง</h2><p>หนังสือจริง 200 เล่ม (ไทย 128 อังกฤษ 72) ภาพปกจากร้านนายอินทร์และ Open Library นักเรียนจำลอง ${fmt(STUDENTS.length)} คน กำลังยืม ${S.loans.length} เล่ม และสถิติจำลอง 4 ภาคเรียน</p><p class="try">รหัสผ่านทดลองของนักเรียนทุกคนคือ 1234 และ PIN ครูคือ 1234</p></span></div>
     </div>
+    <p class="foot"><a class="btn primary" href="#/guide" target="_blank" rel="noopener">${ICON.help}คู่มือสำหรับผู้ทดสอบระบบ</a></p>
     <p class="foot">ต้นแบบนี้ใช้ทดสอบการใช้งานกับครูและนักเรียน ไม่ได้เชื่อมต่อฐานข้อมูลจริง ข้อมูลที่กรอกจะหายเมื่อโหลดหน้าใหม่ แถบ "ต้นแบบ" มุมขวาบนใช้สลับบทบาทและจำลองอินเทอร์เน็ตขัดข้อง</p>
+  </main>`
+  };
+}
+function viewGuide() {
+  const pdf = 'https://raw.githubusercontent.com/vipakorn/punarn_1/main/prototype/punarn_tester_guide.pdf';
+  const viewer = 'https://docs.google.com/viewer?url=' + encodeURIComponent(pdf) + '&embedded=true';
+  return {
+    title: 'คู่มือสำหรับผู้ทดสอบระบบ',
+    html: `<main class="launch">
+    <div class="brand">${brand()}</div>
+    <p><a class="linkbtn" href="#/">${ICON.back} กลับหน้าแรก</a></p>
+    <h1>คู่มือสำหรับผู้ทดสอบระบบ</h1>
+    <p class="lead">เอกสารแนะนำการทดสอบต้นแบบปันอ่านสำหรับครูและนักเรียน</p>
+    <iframe src="${viewer}" title="คู่มือสำหรับผู้ทดสอบระบบ" style="width:100%;height:80vh;margin-top:18px;border:1px solid var(--line);border-radius:var(--r-panel)"></iframe>
   </main>`
   };
 }
