@@ -24,7 +24,7 @@
 .kv dt .info{vertical-align:0}
 .t-top{padding-right:236px}
 .e-top{padding-right:236px;flex-wrap:wrap}
-.k-right{padding-top:64px}
+.k-right{padding-top:52px;padding-bottom:24px}
 .chart{position:relative}
 .toplist li>span:nth-child(3){line-height:1.35}
 .dz input[type=file]{position:absolute}
@@ -152,3 +152,10 @@ details summary{cursor:pointer}
 .pin-wrap .input{flex:1;min-width:0}
 .pin-wrap .input[type=password]{letter-spacing:.25em}
 .pin-wrap .btn{min-width:64px}
+
+/* kiosk: fit a 1024×768 tablet without scrolling (vertical spacing −48px, keypad size unchanged)
+   and show error messages over the code display so the keypad never moves under a finger */
+.k-display{margin:18px 0 14px}
+.k-exit{margin-top:14px}
+#k-msg{position:relative;height:0}
+#k-msg .msg{position:absolute;left:0;right:0;bottom:14px;margin:0;min-height:79px;display:flex;align-items:center;z-index:2;font-size:1rem}
