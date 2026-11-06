@@ -160,3 +160,9 @@ details summary{cursor:pointer}
 .k-exit{margin-top:14px}
 #k-msg{position:relative;height:0}
 #k-msg .msg{position:absolute;left:0;right:0;bottom:14px;margin:0;min-height:79px;display:flex;align-items:center;z-index:2;font-size:1rem}
+
+/* covers: title card shows instantly underneath, the real cover fades in over it once loaded */
+.cover img{position:relative;z-index:1;opacity:0;transition:opacity .28s ease}
+.cover img.ok{opacity:1}
+@media (prefers-reduced-motion:reduce){.cover img{transition:none}}
+@media print{.cover img{opacity:1}}
