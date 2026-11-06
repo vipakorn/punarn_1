@@ -35,7 +35,7 @@ function viewKiosk() {
     d.textContent = code ? code.split('').join(' ') : 'รหัสประจำตัว';
     d.setAttribute('aria-label', code ? 'รหัส ' + code : 'ยังไม่ได้พิมพ์รหัส');
   }
-  function msg(t) { const m = $('#k-msg'); m.innerHTML = t ? `<div class="msg err" role="alert" style="font-size:1rem;margin:-4px 0 14px">${t}</div>` : ''; clearTimeout(msgT); if (t) msgT = later(() => msg(''), 5000); }
+  function msg(t) { const m = $('#k-msg'); m.innerHTML = t ? `<div class="msg err" role="alert">${t}</div>` : ''; clearTimeout(msgT); if (t) msgT = later(() => msg(''), 5000); }
   function closeOver() { if (over) { over.remove(); over = null; clearTimeout(overT); } }
   function card(html, warn) {
     closeOver();
