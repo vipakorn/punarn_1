@@ -31,9 +31,10 @@
 .suggest label>span{line-height:1.45}
 @media (max-width:1000px){.toplist{columns:1!important}.t-top{padding-right:16px;flex-wrap:wrap}.e-top{padding-right:16px}}
 @media (max-width:620px){
-  .protobar{top:auto;bottom:86px;right:10px}
-  .protobar .menu{top:auto;bottom:42px}
-  body[data-view="t"] .protobar,body[data-view="a"] .protobar,body[data-view="e"] .protobar,body[data-view="home"] .protobar,body[data-view="k"] .protobar{bottom:12px}
+  /* มือถือ: ป้าย "ต้นแบบ" เป็นแถบบางที่หัวหน้า อยู่ในลำดับเนื้อหา เลื่อนหายไปพร้อมหน้า ไม่ลอยทับเนื้อหา */
+  .protobar{position:relative;top:auto;right:auto;display:flex;justify-content:flex-end;padding:4px 10px;background:var(--paper);border-bottom:1px dashed var(--line)}
+  .protobar>button{min-height:30px;border:0;background:none;padding:0 2px}
+  .protobar .menu{top:100%;right:10px;z-index:70}
   .t-side{padding:10px}
   .t-side .logo{padding:4px 8px 8px;width:100%}
   .t-side nav a{min-height:38px;font-size:.84rem}
@@ -81,7 +82,7 @@
 .pb-short{display:none}
 .k-right .offline-bar{border-radius:10px;border:0;margin:0 0 18px}
 @media (max-width:1000px){.t-shell{grid-template-columns:minmax(0,1fr)}}
-@media (max-width:620px){.pb-long{display:none}.pb-short{display:inline}}
+
 .tbl{position:relative}
 @media print{.report h2{break-after:avoid}.report .tbl tr,.rep-figs,.report .chart{break-inside:avoid}.report header{break-inside:avoid}}
 
