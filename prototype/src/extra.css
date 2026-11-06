@@ -146,3 +146,9 @@ details summary{cursor:pointer}
 
 /* search: translated edition matched by its original title or author */
 .result .meta.orig{color:var(--teal);margin-top:2px}
+
+/* PIN field: masked with a show/hide toggle */
+.pin-wrap{display:flex;gap:8px;align-items:center}
+.pin-wrap .input{flex:1;min-width:0}
+.pin-wrap .input[type=password]{letter-spacing:.25em}
+.pin-wrap .btn{min-width:64px}
