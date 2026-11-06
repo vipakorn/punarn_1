@@ -220,7 +220,7 @@ const ASSIST_IDS = ['43105', '42214', '41330', '40407'];
 /* ---------- app state (in memory only) ---------- */
 const S = {
   role: 'teacher', me: 's1', exported: {}, student: null, offline: false, queue: [],
-  policy: { max: 3, days: 7, renew: 1, block: false }, pin: '1234',
+  policy: { max: 3, days: 7, renew: 1, block: false, fine: 1 }, pin: '1234',
   loans: [], visits: [], log: [], drafts: [], classUse: [], labelQueue: [], audit: [], back: [],
   kioskOpened: false, circ: null, cat: null
 };
@@ -275,10 +275,13 @@ BY['1000093'] && (BY['1000093'].s = 'repair');
 const loanOf = bc => S.loans.find(l => l.bc === bc);
 const loansOf = sid => S.loans.filter(l => l.sid === sid);
 const overdue = () => S.loans.filter(l => diffDays(l.due, TODAY) < 0).sort((a, b) => a.due - b.due);
-/* ค่าปรับ: วันละ 1 บาทต่อเล่ม นับทุกวันรวมวันหยุด */
-const FINE_RATE = 1;
+/* ค่าปรับ: อัตราบาทต่อวันต่อเล่มตั้งในหน้าตั้งค่าโรงเรียน นับทุกวันรวมวันหยุด
+   อัตราถูกบันทึกไว้กับรายการยืม ณ วันที่ยืม (l.rate) การแก้อัตรามีผลกับการยืมครั้งต่อไปเท่านั้น
+   รายการยืมที่เกิดก่อนมีการตั้งค่านี้ใช้อัตราเดิมของระบบ 1 บาท */
+const LEGACY_FINE = 1;
+const rateOf = l => (l && l.rate != null) ? l.rate : LEGACY_FINE;
 const lateDays = l => Math.max(0, -diffDays(l.due, TODAY));
-const fineOf = l => lateDays(l) * FINE_RATE;
+const fineOf = l => lateDays(l) * rateOf(l);
 const overdueOf = sid => loansOf(sid).filter(l => lateDays(l) > 0).sort((a, b) => a.due - b.due);
 /* ค่าปรับค้างชำระจากเล่มที่คืนล่าช้าไปแล้ว (บันทึกตอนรับคืน) */
 const owedOf = sid => (S.fineOwed && S.fineOwed[sid]) || 0;
@@ -824,7 +827,7 @@ function sLate() {
     const b = BY[l.bc], d = lateDays(l);
     return `<a class="loan soon" href="#/s/book/${b.bc}">${cover(b)}<div><div style="font-weight:500;line-height:1.4">${esc(shortTitle(b.t))}</div>
       <div class="due">เกินกำหนด ${d} วัน ครบกำหนด ${thShort(l.due)}</div>
-      <div class="small muted">ค่าปรับขณะนี้ ${d} บาท (วันละ ${FINE_RATE} บาท)</div></div></a>`;
+      <div class="small muted">${rateOf(l) ? `ค่าปรับขณะนี้ ${fmt(fineOf(l))} บาท (วันละ ${fmt(rateOf(l))} บาท ตามอัตราวันที่ยืม)` : 'ไม่คิดค่าปรับ'}</div></div></a>`;
   };
   const okRow = l => { const b = BY[l.bc], d = dueText(l.due); return `<a class="loan" href="#/s/book/${b.bc}">${cover(b)}<div><div style="font-weight:500;line-height:1.4">${esc(shortTitle(b.t))}</div><div class="due">${d.txt}</div></div></a>`; };
   return {
@@ -837,7 +840,7 @@ function sLate() {
         <div class="fine-num num">${fmt(total)} บาท</div>
         <div class="small">${late.length ? `${late.length} เล่มที่ยังไม่คืน` : ''}${late.length && owed ? ' และ' : ''}${owed ? `ค่าปรับจากเล่มที่คืนล่าช้าแล้ว ${owed} บาท` : ''} ชำระที่เคาน์เตอร์ห้องสมุด</div>
       </div>
-      <p class="small muted" style="margin-top:10px">ค่าปรับคิดวันละ ${FINE_RATE} บาทต่อเล่ม นับทุกวันรวมวันหยุด และจะเพิ่มขึ้นทุกวันจนกว่าจะนำมาคืน</p>
+      <p class="small muted" style="margin-top:10px">${(r => r.length === 1 ? `ค่าปรับคิดวันละ ${fmt(r[0])} บาทต่อเล่ม` : 'ค่าปรับคิดตามอัตราที่ใช้ในวันที่ยืมแต่ละเล่ม')([...new Set(late.map(rateOf))])} นับทุกวันรวมวันหยุด และเพิ่มขึ้นทุกวันจนกว่าจะนำมาคืน</p>
     </section>
     ${late.length ? `<section class="sec"><div class="sec-h"><h2>รายการที่เกินกำหนด</h2></div>
       <div class="stack">${late.map(row).join('')}</div></section>` : ''}`
@@ -1113,8 +1116,8 @@ function tCirc() {
           ${C.sub === 'return' ? scanForm('สแกนบาร์โค้ดหนังสือที่จะคืน หรือพิมพ์เลขทะเบียน', 'เลขทะเบียน 7 หลัก') : scanForm('สแกนบาร์โค้ดหนังสือที่จะยืม หรือพิมพ์เลขทะเบียน', 'เลขทะเบียน 7 หลัก')}
           ${tryRow(tries)}${msgBox()}
           ${!A && my.length ? `<h3 class="list-h">หนังสือที่ค้างอยู่ ${my.length} เล่ม</h3><div class="basket">${my.map(loanRow).join('')}</div>` : ''}
-          ${C.basket.length ? `<h3 class="list-h">จะยืม ${C.basket.length} เล่ม คืนภายใน ${thShort(due)}</h3><div class="basket" aria-label="หนังสือที่จะยืม">${C.basket.map(bc => { const b = BY[bc]; return `<div class="item">${cover(b)}<div><div class="t" style="font-weight:500">${esc(shortTitle(b.t))}</div><div class="small muted">${esc(b.call)} เลขทะเบียน ${bc}</div></div><span></span><button type="button" class="btn ghost sm" data-rm="${bc}" aria-label="นำ ${esc(shortTitle(b.t))} ออก">นำออก</button></div>`; }).join('')}</div>` : ''}
-          ${C.sret.length ? `<h3 class="list-h">คืนแล้วรอบนี้ ${C.sret.length} เล่ม</h3><div class="basket">${C.sret.map(x => { const b = BY[x.bc]; return `<div class="item">${cover(b)}<div><div style="font-weight:500">${esc(shortTitle(b.t))}</div><div class="small">วางกลับที่${esc(b.loc)}</div></div>${x.late ? `<span class="pill late">เกิน ${x.late} วัน · ${x.late * FINE_RATE} บาท</span>` : '<span class="pill ok">คืนตรงเวลา</span>'}${spine(b.call, 'sm')}</div>`; }).join('')}</div>` : ''}
+          ${C.basket.length ? `<h3 class="list-h">จะยืม ${C.basket.length} เล่ม คืนภายใน ${thShort(due)}${S.policy.fine ? ` · เกินกำหนดปรับวันละ ${fmt(S.policy.fine)} บาท` : ''}</h3><div class="basket" aria-label="หนังสือที่จะยืม">${C.basket.map(bc => { const b = BY[bc]; return `<div class="item">${cover(b)}<div><div class="t" style="font-weight:500">${esc(shortTitle(b.t))}</div><div class="small muted">${esc(b.call)} เลขทะเบียน ${bc}</div></div><span></span><button type="button" class="btn ghost sm" data-rm="${bc}" aria-label="นำ ${esc(shortTitle(b.t))} ออก">นำออก</button></div>`; }).join('')}</div>` : ''}
+          ${C.sret.length ? `<h3 class="list-h">คืนแล้วรอบนี้ ${C.sret.length} เล่ม</h3><div class="basket">${C.sret.map(x => { const b = BY[x.bc]; return `<div class="item">${cover(b)}<div><div style="font-weight:500">${esc(shortTitle(b.t))}</div><div class="small">วางกลับที่${esc(b.loc)}</div></div>${x.late ? `<span class="pill late">เกิน ${x.late} วัน · ${fmt(x.fine)} บาท</span>` : '<span class="pill ok">คืนตรงเวลา</span>'}${spine(b.call, 'sm')}</div>`; }).join('')}</div>` : ''}
           <div class="row" style="justify-content:flex-end;margin-top:18px"><button type="button" class="btn" data-cancel>ยกเลิก</button><button type="button" class="btn primary" data-done>เสร็จสิ้น${C.basket.length ? ` (บันทึกการยืม ${C.basket.length} เล่ม)` : ''}</button></div>
           <p class="small muted" style="text-align:right;margin-top:6px">การคืนบันทึกทันทีที่สแกน การยืมบันทึกเมื่อกดเสร็จสิ้น หรือกด Enter ที่ช่องว่าง</p>`;
         bind();
@@ -1134,8 +1137,8 @@ function tCirc() {
         const l = loanOf(bc), b = BY[bc]; const late = Math.max(0, -diffDays(l.due, TODAY));
         S.loans = S.loans.filter(x => x !== l); b.s = 'on';
         S.log.push({ type: 'return', bc, sid: l.sid, t: now(), late }); enqueue({ type: 'return', bc });
-        addOwed(l.sid, late * FINE_RATE);
-        return { bc, sid: l.sid, late };
+        const fine = late * rateOf(l); addOwed(l.sid, fine);
+        return { bc, sid: l.sid, late, fine };
       }
       function scan(val) {
         val = val.trim(); if (!val) { if (C.mode === 'borrow' && C.patron) finish(); return; }
@@ -1176,11 +1179,11 @@ function tCirc() {
       }
       function returnMine(bc) {
         const b = BY[bc], r = doReturn(bc); C.sret.unshift(r);
-        C.msg = { k: 'ok', h: `<b>บันทึกการคืนแล้ว</b>&nbsp;${esc(shortTitle(b.t))} ${r.late ? `เกินกำหนด ${r.late} วัน ค่าปรับ ${r.late * FINE_RATE} บาท` : 'คืนตรงเวลา'}${S.offline ? ' (เก็บไว้ในเครื่อง รอส่ง)' : ''}` };
+        C.msg = { k: 'ok', h: `<b>บันทึกการคืนแล้ว</b>&nbsp;${esc(shortTitle(b.t))} ${r.late ? `เกินกำหนด ${r.late} วัน ${r.fine ? `ค่าปรับ ${fmt(r.fine)} บาท` : 'ไม่คิดค่าปรับ'}` : 'คืนตรงเวลา'}${S.offline ? ' (เก็บไว้ในเครื่อง รอส่ง)' : ''}` };
       }
       function finish() {
         const me = SBY[C.patron], due = nextSchoolDay(addDays(TODAY, S.policy.days)), nB = C.basket.length, nR = C.sret.length;
-        C.basket.forEach(bc => { S.loans.push({ bc, sid: me.id, out: now(), due }); BY[bc].s = 'out'; S.log.push({ type: 'borrow', bc, sid: me.id, t: now(), live: true }); enqueue({ type: 'borrow', bc }); });
+        C.basket.forEach(bc => { S.loans.push({ bc, sid: me.id, out: now(), due, rate: S.policy.fine }); BY[bc].s = 'out'; S.log.push({ type: 'borrow', bc, sid: me.id, t: now(), live: true }); enqueue({ type: 'borrow', bc }); });
         const nO = C.over.filter(bc => C.basket.includes(bc)).length;
         if (nO) S.audit.unshift({ t: now(), who: ME().name, what: `อนุมัติให้ยืมเกินจำนวนสูงสุด ${nO} เล่ม แก่นักเรียนรหัส ${me.id} ${cls(me)} รวมยืมอยู่ ${loansOf(me.id).length} เล่ม (สูงสุด ${S.policy.max})` });
         const fine = fineTotal(me.id), parts = [nB && `ยืม ${nB} เล่ม${nO ? ` (เกินจำนวนสูงสุด ${nO} เล่ม)` : ''} คืนภายใน ${thDate(due)}`, nR && `คืน ${nR} เล่ม`].filter(Boolean);
@@ -1954,6 +1957,8 @@ function tSettings() {
         <label class="field"><span>ยืมได้สูงสุด <em>(เล่มต่อคน)</em></span><input class="input" name="max" type="number" min="1" max="10" value="${P.max}"></label>
         <label class="field"><span>ระยะเวลายืม <em>(วัน)</em></span><input class="input" name="days" type="number" min="1" max="30" value="${P.days}"></label>
         <label class="field"><span>ต่ออายุได้ <em>(ครั้ง)</em></span><input class="input" name="renew" type="number" min="0" max="3" value="${P.renew}"></label>
+        <label class="field"><span>ค่าปรับเกินกำหนด <em>(บาทต่อวันต่อเล่ม)</em></span><input class="input" name="fine" type="number" min="0" max="100" step="1" inputmode="numeric" value="${P.fine}" aria-describedby="fine-help"></label>
+        <p class="small muted full" id="fine-help" style="margin:-4px 0 0">อัตราใหม่ใช้กับหนังสือที่ยืมตั้งแต่วันที่บันทึกเป็นต้นไป เล่มที่ยืมไปแล้วคิดตามอัตราเดิมในวันที่ยืม ใส่ 0 หากไม่เก็บค่าปรับ</p><div id="fine-err" class="full" aria-live="polite"></div>
         <label class="field full"><span>เมื่อมีหนังสือเกินกำหนด</span><select class="input" name="block"><option value="0" ${P.block ? '' : 'selected'}>เตือน แต่ยังยืมเล่มใหม่ได้</option><option value="1" ${P.block ? 'selected' : ''}>ต้องคืนก่อน จึงยืมเล่มใหม่ได้</option></select></label>
       </div><p class="small muted" style="margin-top:10px">ถ้าวันครบกำหนดตรงกับวันหยุด ระบบเลื่อนเป็นวันเปิดเรียนถัดไปให้</p></section>
       <section class="panel"><h2 style="margin-bottom:14px">Kiosk และมุมจัดเก็บ</h2><div class="grid2">
@@ -1967,7 +1972,11 @@ function tSettings() {
         e.preventDefault(); const d = Object.fromEntries(new FormData(e.target));
         if (!/^\d{4,6}$/.test(d.pin)) { $('#pin-err', root).innerHTML = '<div class="msg err" role="alert">PIN ต้องเป็นตัวเลข 4–6 หลัก</div>'; return $('#set-pin', root).focus(); }
         $('#pin-err', root).innerHTML = '';
-        Object.assign(S.policy, { max: +d.max || 3, days: +d.days || 7, renew: +d.renew || 0, block: d.block === '1' });
+        const fine = Number(d.fine);
+        if (d.fine === '' || !Number.isInteger(fine) || fine < 0 || fine > 100) { $('#fine-err', root).innerHTML = '<div class="msg err" role="alert">ค่าปรับต้องเป็นจำนวนเต็ม 0–100 บาท</div>'; return root.querySelector('[name=fine]').focus(); }
+        $('#fine-err', root).innerHTML = '';
+        if (fine !== S.policy.fine) S.audit.unshift({ t: now(), who: ME().name, what: `เปลี่ยนอัตราค่าปรับจาก ${S.policy.fine} เป็น ${fine} บาทต่อวันต่อเล่ม มีผลกับการยืมตั้งแต่ ${thDate(TODAY)}`, perm: true });
+        Object.assign(S.policy, { max: +d.max || 3, days: +d.days || 7, renew: +d.renew || 0, block: d.block === '1', fine });
         if (d.pin !== S.pin) { S.pin = d.pin; S.audit.unshift({ t: now(), who: ME().name, what: 'เปลี่ยน PIN สำหรับออกจากโหมด kiosk', perm: true }); }
         S.audit.unshift({ t: now(), who: ME().name, what: `แก้นโยบายการยืม: ${S.policy.days} วัน ${S.policy.max} เล่ม` });
         const pin = $('#set-pin', root); if (pin.type === 'text') $('[data-reveal="set-pin"]', root).click();
