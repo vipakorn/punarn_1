@@ -451,7 +451,7 @@ function tSettings() {
         <label class="field full"><span>เมื่อมีหนังสือเกินกำหนด</span><select class="input" name="block"><option value="0" ${P.block ? '' : 'selected'}>เตือน แต่ยังยืมเล่มใหม่ได้</option><option value="1" ${P.block ? 'selected' : ''}>ต้องคืนก่อน จึงยืมเล่มใหม่ได้</option></select></label>
       </div><p class="small muted" style="margin-top:10px">ถ้าวันครบกำหนดตรงกับวันหยุด ระบบเลื่อนเป็นวันเปิดเรียนถัดไปให้</p></section>
       <section class="panel"><h2 style="margin-bottom:14px">Kiosk และมุมจัดเก็บ</h2><div class="grid2">
-        <label class="field"><span>PIN สำหรับออกจากโหมด kiosk</span><input class="input" name="pin" inputmode="numeric" value="${esc(S.pin)}" maxlength="6"></label>
+        <div>${pinField('set-pin', 'PIN สำหรับออกจากโหมด kiosk <em>(ตัวเลข 4–6 หลัก)</em>', S.pin, 'autocomplete="new-password" aria-describedby="pin-err"')}<div id="pin-err" aria-live="polite"></div></div>
         <label class="field"><span>ไม่นับซ้ำเมื่อสแกนภายใน</span><select class="input"><option>30 นาที</option><option>60 นาที</option></select></label>
         <label class="field full"><span>มุมจัดเก็บหนังสือ <em>(บรรทัดละ 1 มุม)</em></span><textarea class="input" rows="6">${LOCS.join('\n')}</textarea></label>
       </div></section>
@@ -459,10 +459,15 @@ function tSettings() {
     mount(root) {
       $('[data-set]', root).addEventListener('submit', e => {
         e.preventDefault(); const d = Object.fromEntries(new FormData(e.target));
-        Object.assign(S.policy, { max: +d.max || 3, days: +d.days || 7, renew: +d.renew || 0, block: d.block === '1' }); S.pin = d.pin || S.pin;
+        if (!/^\d{4,6}$/.test(d.pin)) { $('#pin-err', root).innerHTML = '<div class="msg err" role="alert">PIN ต้องเป็นตัวเลข 4–6 หลัก</div>'; return $('#set-pin', root).focus(); }
+        $('#pin-err', root).innerHTML = '';
+        Object.assign(S.policy, { max: +d.max || 3, days: +d.days || 7, renew: +d.renew || 0, block: d.block === '1' });
+        if (d.pin !== S.pin) { S.pin = d.pin; S.audit.unshift({ t: now(), who: ME().name, what: 'เปลี่ยน PIN สำหรับออกจากโหมด kiosk', perm: true }); }
         S.audit.unshift({ t: now(), who: ME().name, what: `แก้นโยบายการยืม: ${S.policy.days} วัน ${S.policy.max} เล่ม` });
+        const pin = $('#set-pin', root); if (pin.type === 'text') $('[data-reveal="set-pin"]', root).click();
         toast('บันทึกการตั้งค่าแล้ว');
       });
+      bindReveal(root);
     }
   };
 }

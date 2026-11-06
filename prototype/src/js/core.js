@@ -63,6 +63,13 @@ const STATUS = { on: 'อยู่บนชั้น', out: 'ถูกยืม'
    ช่วง U+0300–036F ไม่รวมสระและวรรณยุกต์ไทย จึงไม่กระทบการค้นภาษาไทย */
 const norm = s => String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').normalize('NFC')
   .replace(/['’‘`]/g, '').replace(/[.,:;!?"“”()[\]/\\=–—-]+/g, ' ').replace(/\s+/g, ' ').trim();
+/* ช่อง PIN แบบรหัสผ่าน พร้อมปุ่มแสดง/ซ่อน ใช้ทั้งหน้าตั้งค่าและหน้าต่างออกจาก kiosk */
+const pinField = (id, label, value = '', extra = '') => `<div class="field"><label for="${id}"><span>${label}</span></label><div class="pin-wrap"><input class="input" id="${id}" name="pin" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="6" autocomplete="off" spellcheck="false" value="${esc(value)}" ${extra}><button type="button" class="btn ghost sm" data-reveal="${id}" aria-pressed="false" aria-label="แสดง PIN">แสดง</button></div></div>`;
+const bindReveal = root => $$('[data-reveal]', root).forEach(b => b.addEventListener('click', () => {
+  const i = document.getElementById(b.dataset.reveal), show = i.type === 'password';
+  i.type = show ? 'text' : 'password'; b.textContent = show ? 'ซ่อน' : 'แสดง';
+  b.setAttribute('aria-pressed', show); b.setAttribute('aria-label', show ? 'ซ่อน PIN' : 'แสดง PIN'); i.focus();
+}));
 /* ระเบียนควบคุมของหนังสือแปล ตามเขตข้อมูล MARC 21
    l = 041 $h ภาษาต้นฉบับ, u = 240 ชื่อเรื่องแบบฉบับ (ชื่อต้นฉบับ ตัดคำนำหน้านามตามหลัก RDA),
    v = 246 ชื่อเรื่องที่แตกต่าง, n = 700 ชื่อบุคคลรูปแบบควบคุม (นามสกุล, ชื่อ) */
