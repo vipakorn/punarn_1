@@ -352,23 +352,30 @@ const schoolMark = (sub = 'ห้องสมุดบนระบบปัน�
 const info = txt => `<span class="info" tabindex="0" role="note" aria-label="${esc(txt)}">i<span class="tip" aria-hidden="true">${esc(txt)}</span></span>`;
 
 /* ---------- covers & spine labels ---------- */
-function coverUrls(b, big) {
-  if (!b.cv) return [];
+/* ปก: (1) แสดงการ์ดสีพร้อมชื่อเรื่องทันที แทนกล่องสีเทา แล้วให้ภาพจริงจางเข้ามาเมื่อโหลดเสร็จ
+   (2) srcset ให้เบราว์เซอร์เลือกขนาดตามที่แสดงจริง นายอินทร์ _M 156px / _XL 312px, Open Library -M 180px / -L 378px
+   (3) sizes="auto" ใช้ความกว้างจริงของภาพ lazy ส่วนเบราว์เซอร์ที่ไม่รองรับใช้ค่าสำรองถัดไป */
+function coverSet(b) {
+  if (!b.cv) return null;
   const [k, p, ext] = b.cv.split('|');
-  if (k === 'n') { const base = 'https://storage.naiin.com/system/application/bookstore/resource/product/' + p; return big ? [`${base}_XXL.${ext}`, `${base}_XL.${ext}`] : [`${base}_XL.${ext}`, `${base}_XXL.${ext}`]; }
-  const base = 'https://covers.openlibrary.org/b/id/' + p; return big ? [`${base}-L.jpg?default=false`, `${base}-M.jpg?default=false`] : [`${base}-M.jpg?default=false`, `${base}-L.jpg?default=false`];
+  if (k === 'n') { const base = 'https://storage.naiin.com/system/application/bookstore/resource/product/' + p; return { s: `${base}_M.${ext}`, m: `${base}_XL.${ext}`, l: `${base}_XXL.${ext}`, ws: [156, 312, 435] }; }
+  const base = 'https://covers.openlibrary.org/b/id/' + p; return { s: `${base}-M.jpg?default=false`, m: `${base}-L.jpg?default=false`, l: '', ws: [180, 378] };
 }
 const phHTML = (t, a, bc) => `<span class="cover-ph${hash(bc) % 3 === 1 ? ' v1' : hash(bc) % 3 === 2 ? ' v2' : ''}" aria-hidden="true"><b>${esc(shortTitle(t))}</b><small>${esc(String(a || '').split(',')[0])}</small></span>`;
 function cover(b, o = {}) {
-  const u = coverUrls(b, o.big);
-  if (!u.length) return `<span class="cover">${phHTML(b.t, b.a, b.bc || b.isbn)}</span>`;
-  return `<span class="cover"><img src="${u[0]}" data-fb="${u[1]}" data-t="${esc(b.t)}" data-a="${esc(b.a)}" data-k="${esc(b.bc || b.isbn)}" alt="" ${o.eager ? '' : 'loading="lazy"'} decoding="async" onerror="coverErr(this)"></span>`;
+  const ph = phHTML(b.t, b.a, b.bc || b.isbn), c = coverSet(b);
+  if (!c) return `<span class="cover">${ph}</span>`;
+  const set = `${c.s} ${c.ws[0]}w, ${c.m} ${c.ws[1]}w${c.l ? `, ${c.l} ${c.ws[2]}w` : ''}`;
+  const sizes = o.big ? '132px' : 'auto, 112px';
+  return `<span class="cover">${ph}<img src="${o.big ? c.m : c.s}" srcset="${set}" sizes="${sizes}" data-fb="${o.big ? c.s : c.m}" alt="" width="2" height="3" ${o.eager ? 'fetchpriority="high"' : 'loading="lazy"'} decoding="async" onload="this.classList.add('ok')" onerror="coverErr(this)"></span>`;
 }
 window.coverErr = function (img) {
   const fb = img.getAttribute('data-fb');
-  if (fb) { img.removeAttribute('data-fb'); img.src = fb; return; }
-  img.outerHTML = phHTML(img.dataset.t, img.dataset.a, img.dataset.k);
+  /* srcset มีลำดับเหนือ src จึงต้องลบออกก่อนเปลี่ยนไปใช้ภาพสำรอง */
+  if (fb) { img.removeAttribute('data-fb'); img.removeAttribute('srcset'); img.removeAttribute('sizes'); img.src = fb; return; }
+  img.remove(); /* การ์ดชื่อเรื่องอยู่ด้านหลังแล้ว */
 };
+
 const spine = (call, size = '') => `<span class="spine ${size}" role="img" aria-label="ป้ายสันหนังสือ ${esc(call)}">${String(call).split(' ').map(p => `<span>${esc(p)}</span>`).join('')}</span>`;
 function statusPill(b, forStudent) {
   if (b.s === 'out') {
