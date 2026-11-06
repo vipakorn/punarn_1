@@ -12,11 +12,11 @@ const rnd = mulberry32(2569);
 const pick = arr => arr[Math.floor(rnd() * arr.length)];
 function hash(s) { let h = 2166136261; for (const c of String(s)) { h ^= c.charCodeAt(0); h = Math.imul(h, 16777619); } return h >>> 0; }
 
-/* ---------- dates (demo clock: Mon 14 Sep 2569, 10:42) ---------- */
-const DEMO = new Date(2026, 8, 14, 10, 42, 0);
+/* ---------- dates (demo clock: Fri 30 Oct 2569, 09:20) ---------- */
+const DEMO = new Date(2026, 9, 30, 9, 20, 0);
 const T0 = Date.now();
 const now = () => new Date(DEMO.getTime() + (Date.now() - T0));
-const TODAY = new Date(2026, 8, 14);
+const TODAY = new Date(2026, 9, 30);
 const TM = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
 const TMF = ['มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน', 'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม'];
 const TD = ['อาทิตย์', 'จันทร์', 'อังคาร', 'พุธ', 'พฤหัสบดี', 'ศุกร์', 'เสาร์'];
@@ -207,13 +207,17 @@ const S = {
   kioskOpened: false, circ: null, cat: null
 };
 (function genActivity() {
+  /* วันนี้ (TODAY) คือวันศุกร์ที่ 30 ต.ค. 2569 ภาคเรียนที่ 1/2569 เปิดเรียนถึงวันที่ 9 ต.ค. แล้วปิดภาคเรียน
+     ตัวช่วยสองตัวนี้สร้างเวลาที่ผูกกับ "วันนี้" แทนวันที่ตายตัว เพื่อให้เลื่อนนาฬิกาสาธิตได้โดยไม่ต้องแก้ทุกจุด */
+  const onDay = (h, mi) => new Date(TODAY.getFullYear(), TODAY.getMonth(), TODAY.getDate(), h, mi);
+  const onOffset = (days, h, mi) => { const d = addDays(TODAY, days); return new Date(d.getFullYear(), d.getMonth(), d.getDate(), h, mi); };
   const out = BOOKS.filter(b => b.s === 'out').map(b => b.bc);
-  const mine = { '1000085': [8, 15], '1000184': [12, 19], '1000031': [1, 8] };
+  const mine = { '1000085': 1, '1000184': 5, '1000031': -6 }; // กำหนดคืน: พรุ่งนี้ / อีก 5 วัน / เกินกำหนดแล้ว 6 วัน
   const others = STUDENTS.filter(s => s.id !== '41208' && s.id !== '40115');
   const overdueAgo = [3, 4, 6, 10, 11, 17];
   let oi = 0, ti = 0;
   out.forEach((bc, k) => {
-    if (mine[bc]) { S.loans.push({ bc, sid: '41208', out: new Date(2026, 8, mine[bc][0]), due: new Date(2026, 8, mine[bc][1]) }); return; }
+    if (mine[bc] != null) { const due = addDays(TODAY, mine[bc]); S.loans.push({ bc, sid: '41208', out: addDays(due, -7), due }); return; }
     let due;
     if (k % 3 === 1 && oi < overdueAgo.length) { due = addDays(TODAY, -overdueAgo[oi++]); while (due.getDay() === 0 || due.getDay() === 6) due = addDays(due, -1); }
     else if (ti < 5 && k % 3 === 2) { due = nextSchoolDay(addDays(TODAY, 7)); ti++; }
@@ -221,36 +225,38 @@ const S = {
     const sid = others[Math.floor(rnd() * others.length)].id;
     S.loans.push({ bc, sid, out: addDays(due, -7), due });
   });
-  S.loans.filter(l => diffDays(l.out, TODAY) === 0).forEach((l, i) => S.log.push({ type: 'borrow', bc: l.bc, sid: l.sid, t: new Date(2026, 8, 14, 7, 20 + i * 6) }));
-  ['1000012', '1000047', '1000160'].forEach((bc, i) => S.log.push({ type: 'return', bc, sid: others[i * 50].id, t: new Date(2026, 8, 14, 7, 35 + i * 9), late: i === 1 ? 2 : 0 }));
+  S.loans.filter(l => diffDays(l.out, TODAY) === 0).forEach((l, i) => S.log.push({ type: 'borrow', bc: l.bc, sid: l.sid, t: onDay(7, 20 + i * 6) }));
+  ['1000012', '1000047', '1000160'].forEach((bc, i) => S.log.push({ type: 'return', bc, sid: others[i * 50].id, t: onDay(7, 35 + i * 9), late: i === 1 ? 2 : 0 }));
   const pool = others.slice();
   const take = () => pool.splice(Math.floor(rnd() * pool.length), 1)[0];
-  for (let i = 0; i < 24; i++) S.visits.push({ sid: take().id, t: new Date(2026, 8, 14, 7, 2 + Math.floor(i * 2.1)), src: 'kiosk' });
-  for (let i = 0; i < 38; i++) S.visits.push({ sid: take().id, t: new Date(2026, 8, 14, 9, 15 + Math.floor(i * 2.2)), src: 'kiosk' });
-  S.visits.push({ sid: '40115', t: new Date(2026, 8, 14, 10, 31), src: 'kiosk' });
+  for (let i = 0; i < 24; i++) S.visits.push({ sid: take().id, t: onDay(7, 2 + Math.floor(i * 2.1)), src: 'kiosk' });
+  for (let i = 0; i < 38; i++) S.visits.push({ sid: take().id, t: onDay(9, 15 + Math.floor(i * 2.2)), src: 'kiosk' });
+  S.visits.push({ sid: '40115', t: onDay(10, 31), src: 'kiosk' });
   S.visits.sort((a, b) => a.t - b.t);
   S.drafts.push({
-    id: 'd1', by: '43105', at: new Date(2026, 8, 14, 9, 12), isbn: '9780060731335', t: 'Freakonomics : a rogue economist explores the hidden side of everything',
+    id: 'd1', by: '43105', at: onDay(9, 12), isbn: '9780060731335', t: 'Freakonomics : a rogue economist explores the hidden side of everything',
     ed: 'Revised and expanded ed.', a: 'Steven D. Levitt, Stephen J. Dubner', p: 'Harper Perennial', y: '2009', pg: '315', lang: 'อังกฤษ',
     type: 'สารคดี/ความรู้ทั่วไป', cls: '300 สังคมศาสตร์', ddc: '330', call: '330 LEV f', subj: 'Economics -- Sociological aspects', lvl: 'ม.4-6',
     loc: 'มุมหนังสือภาษาอังกฤษ (ชั้น 2)', cv: 'o|7352393', src: 'o:OL278022W', from: 'บริจาค', donor: 'ศิษย์เก่ารุ่น 2555'
   });
   S.drafts.push({
-    id: 'd2', by: '42214', at: new Date(2026, 8, 14, 9, 40), isbn: '', t: 'ที่ระลึกครบรอบ 50 ปี โรงเรียนปันอ่านวิทยา', ed: '', a: 'โรงเรียนปันอ่านวิทยา',
+    id: 'd2', by: '42214', at: onDay(9, 40), isbn: '', t: 'ที่ระลึกครบรอบ 50 ปี โรงเรียนปันอ่านวิทยา', ed: '', a: 'โรงเรียนปันอ่านวิทยา',
     p: 'โรงเรียนปันอ่านวิทยา', y: '2568', pg: '120', lang: 'ไทย', type: 'สารคดี/ความรู้ทั่วไป', cls: '300 สังคมศาสตร์', ddc: '373.593',
     call: '373.593 ร ท', subj: 'โรงเรียนปันอ่านวิทยา -- ประวัติ', lvl: 'ม.1-6', loc: 'ชั้นหนังสือทั่วไป (ชั้น 1)', cv: '', from: 'ได้รับจากโรงเรียน', donor: ''
   });
+  /* ตัวอย่างการใช้เป็นห้องเรียนช่วงก่อนปิดภาคเรียน (1-9 ต.ค. 2569 เป็นวันเปิดเรียน) ใช้แทนรายการที่สุ่มสร้างสำหรับเดือนนี้ */
+  const octDay = d => new Date(TODAY.getFullYear(), TODAY.getMonth(), d);
   S.classUse = [
-    { d: new Date(2026, 8, 2), slot: 'คาบ 3 (10:20–11:10)', teacher: 'ครูสมชาย ใจดี', subj: 'ภาษาไทย ท22101', room: 'ม.2/3', n: 34 },
-    { d: new Date(2026, 8, 4), slot: 'คาบ 5 (13:00–13:50)', teacher: 'ครูอรอุมา แสงทอง', subj: 'วิทยาศาสตร์ ว21101', room: 'ม.1/2', n: 33 },
-    { d: new Date(2026, 8, 9), slot: 'คาบ 2 (09:20–10:10)', teacher: 'ครูมาลี ศรีวงศ์', subj: 'ภาษาอังกฤษ อ31101', room: 'ม.4/1', n: 34 },
-    { d: new Date(2026, 8, 11), slot: 'คาบ 6 (13:50–14:40)', teacher: 'ครูสมชาย ใจดี', subj: 'กิจกรรมส่งเสริมการอ่าน', room: 'ม.3/4', n: 33 }
+    { d: octDay(1), slot: 'คาบ 3 (10:20–11:10)', teacher: 'ครูสมชาย ใจดี', subj: 'ภาษาไทย ท22101', room: 'ม.2/3', n: 34 },
+    { d: octDay(2), slot: 'คาบ 5 (13:00–13:50)', teacher: 'ครูอรอุมา แสงทอง', subj: 'วิทยาศาสตร์ ว21101', room: 'ม.1/2', n: 33 },
+    { d: octDay(7), slot: 'คาบ 2 (09:20–10:10)', teacher: 'ครูมาลี ศรีวงศ์', subj: 'ภาษาอังกฤษ อ31101', room: 'ม.4/1', n: 34 },
+    { d: octDay(8), slot: 'คาบ 6 (13:50–14:40)', teacher: 'ครูสมชาย ใจดี', subj: 'กิจกรรมส่งเสริมการอ่าน', room: 'ม.3/4', n: 33 }
   ];
   S.audit = [
-    { t: new Date(2026, 8, 14, 9, 40), who: 'ด.ญ.ณิชาภัทร (ยุวบรรณารักษ์)', what: 'ส่งร่างระเบียน "ที่ระลึกครบรอบ 50 ปี..."' },
-    { t: new Date(2026, 8, 11, 15, 2), who: 'ครูวิไลวรรณ ทองคำ', what: 'เปลี่ยนสถานะ 1000093 เป็น ส่งซ่อม' },
-    { t: new Date(2026, 8, 10, 14, 25), who: 'ครูวิไลวรรณ ทองคำ', what: 'แก้นโยบายการยืม: 7 วัน 3 เล่ม' },
-    { t: new Date(2026, 8, 3, 8, 10), who: 'ครูสมชาย ใจดี', what: 'บันทึกการเข้าใช้ย้อนหลัง 12 คน' }
+    { t: onOffset(0, 9, 40), who: 'ด.ญ.ณิชาภัทร (ยุวบรรณารักษ์)', what: 'ส่งร่างระเบียน "ที่ระลึกครบรอบ 50 ปี..."' },
+    { t: onOffset(-3, 15, 2), who: 'ครูวิไลวรรณ ทองคำ', what: 'เปลี่ยนสถานะ 1000093 เป็น ส่งซ่อม' },
+    { t: onOffset(-4, 14, 25), who: 'ครูวิไลวรรณ ทองคำ', what: 'แก้นโยบายการยืม: 7 วัน 3 เล่ม' },
+    { t: onOffset(-11, 8, 10), who: 'ครูสมชาย ใจดี', what: 'บันทึกการเข้าใช้ย้อนหลัง 12 คน' }
   ];
 })();
 BY['1000093'] && (BY['1000093'].s = 'repair');

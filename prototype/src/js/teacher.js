@@ -156,7 +156,7 @@ function tCirc() {
             ${A ? '' : `<div class="pstats">
               <div><b class="num">${my.length}</b><span>เล่มที่ยังอ่านอยู่</span></div>
               <div class="${fine ? 'bad' : ''}"><b class="num">${fmt(fine)}</b><span>ค่าปรับค้างชำระ (บาท)</span></div>
-              <div><b class="num">${fmt(yr)}</b><span>ยืมในรอบปี ${info('นับตั้งแต่ 1 ต.ค. 2568 ตามปีงบประมาณ ' + FY_NOW + ' รวมรายการที่บันทึกวันนี้')}</span></div>
+              <div><b class="num">${fmt(yr)}</b><span>ยืมในรอบปี ${info('นับตั้งแต่ 1 ต.ค. ' + (FY_NOW - 1) + ' ตามปีงบประมาณ ' + FY_NOW + ' รวมรายการที่บันทึกวันนี้')}</span></div>
             </div>`}
             <div class="seg sub-seg" role="group" aria-label="เลือกงานของนักเรียนคนนี้">
               <button type="button" data-sub="borrow" aria-pressed="${C.sub === 'borrow'}">${ICON.circ}ยืมหนังสือ</button>

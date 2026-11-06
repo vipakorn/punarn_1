@@ -55,7 +55,7 @@ Context file for future Claude sessions. Read this first.
 
 - ไฟล์: `prototype/punarn_prototype.html` (ไฟล์เดียว, vanilla JS, hash routing)
 - แก้ที่ `prototype/src/` แล้วรัน `python3 prototype/src/build.py`
-- ข้อมูลจำลองใช้ seeded PRNG; วันที่สาธิต = จันทร์ 14 ก.ย. 2569 เวลา 10:42
+- ข้อมูลจำลองใช้ seeded PRNG; วันที่สาธิต = ศุกร์ 30 ต.ค. 2569 เวลา 09:20 (ภาคเรียนที่ 1/2569 เปิดเรียนถึง 9 ต.ค. แล้วปิดภาคเรียน)
 - บัญชีทดลอง: นักเรียน 41208 / รหัสผ่าน 1234, PIN ครู 1234, ISBN ทดสอบ 9789744723635
 - ข้อมูลทั้งหมดเป็นของจำลอง ไม่ใช่ข้อมูลจริง
 

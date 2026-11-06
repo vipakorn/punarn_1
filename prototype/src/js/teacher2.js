@@ -163,14 +163,14 @@ function tVisits() {
 
 /* ---------- Reports (FR-M6-01..03, US-02) ---------- */
 function tReports(q) {
-  const opts = MONTHS.filter(m => !(m.y === 2026 && m.m > 8)).map(m => [`${m.y}-${m.m}`, monthLabel(m, true) + (m.partial ? ' (ถึงวันนี้)' : '')]).reverse();
-  const key = q.m || '2026-7'; const [y, m] = key.split('-').map(Number);
+  const opts = MONTHS.map(m => [`${m.y}-${m.m}`, monthLabel(m, true) + (m.partial ? ' (ถึงวันนี้)' : '')]).reverse();
+  const key = q.m || '2026-8'; const [y, m] = key.split('-').map(Number);
   const R = monthStats(y, m), mo = R.mo;
   const tot = R.byGrade.reduce((a, g) => ({ f: a.f + g.f, m: a.m + g.m, l: a.l + g.loans }), { f: 0, m: 0, l: 0 });
   const daily = chartCols(R.days.map(d => ({ group: '', label: d.d.getDate() % 5 === 1 || R.days.length < 12 ? String(d.d.getDate()) : '', v: d.v, hi: true, tip: `<b>${thDay(d.d)}</b>|${fmt(d.v)} ครั้ง` })), { w: 720, h: 170, pad: 3, aria: 'กราฟผู้เข้าใช้รายวัน' });
   const title = `รายงานการใช้ห้องสมุด ประจำเดือน${TMF[m]} ${y + 543}`;
   const report = `<article class="report" id="report">
-    <header><div class="row" style="align-items:flex-start">${CREST(44)}<div><h2 style="margin:0;font-size:1.25rem">${title}</h2><p class="muted">${esc(SCHOOL.name)}${mo.partial ? ' ข้อมูลถึงวันที่ 14 ก.ย. 2569' : ''}</p></div></div><div class="small muted" style="text-align:right">พิมพ์เมื่อ ${thDate(TODAY)}<br>จากระบบปันอ่าน</div></header>
+    <header><div class="row" style="align-items:flex-start">${CREST(44)}<div><h2 style="margin:0;font-size:1.25rem">${title}</h2><p class="muted">${esc(SCHOOL.name)}${mo.partial ? ' ข้อมูลถึงวันที่ ' + thDate(SESSION_CUT) : ''}</p></div></div><div class="small muted" style="text-align:right">พิมพ์เมื่อ ${thDate(TODAY)}<br>จากระบบปันอ่าน</div></header>
     <div class="rep-figs"><div><b class="num">${fmt(mo.visits)}</b><span>ผู้เข้าใช้ (ครั้ง)</span></div><div><b class="num">${fmt(R.uniq)}</b><span>นักเรียนที่เข้าใช้ (คน)</span></div><div><b class="num">${fmt(mo.loans)}</b><span>ยืมหนังสือ (เล่ม)</span></div><div><b class="num">${fmt(R.classes.length)}</b><span>ใช้เป็นห้องเรียน (ครั้ง)</span></div></div>
     <h2>ผู้เข้าใช้รายวัน</h2><div class="chart" id="rep-chart">${daily}</div>
     <h2>แยกตามระดับชั้นและเพศ</h2>

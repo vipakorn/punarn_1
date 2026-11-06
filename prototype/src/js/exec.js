@@ -3,18 +3,19 @@ const SEMS = [
   { id: '2/2567', months: [[2024, 10], [2024, 11], [2025, 0], [2025, 1], [2025, 2]], f: 0.86, reach: 0.51 },
   { id: '1/2568', months: [[2025, 4], [2025, 5], [2025, 6], [2025, 7], [2025, 8]], f: 1.0, reach: 0.55 },
   { id: '2/2568', months: [[2025, 10], [2025, 11], [2026, 0], [2026, 1], [2026, 2]], f: 1.05, reach: 0.58 },
-  { id: '1/2569', months: [[2026, 4], [2026, 5], [2026, 6], [2026, 7], [2026, 8]], f: 1.13, reach: 0.64, current: true }
+  { id: '1/2569', months: [[2026, 4], [2026, 5], [2026, 6], [2026, 7], [2026, 8], [2026, 9]], f: 1.13, reach: 0.64, current: true }
 ];
-const PARTIAL = 10 / 21; // school days elapsed in Sep 2569 (to 14 Sep)
+const PARTIAL = 7 / 20; // school days elapsed in Oct 2569 before the semester break (to 9 Oct)
+const SESSION_CUT = new Date(2026, 9, 9); // ภาคเรียนที่ 1/2569 เปิดเรียนถึงวันนี้แล้วปิดภาคเรียน ก่อนเปิดภาคเรียนที่ 2
 const GRADE_SH = [0.19, 0.18, 0.17, 0.16, 0.15, 0.15];
 const FEMALE_SH = 0.58, FEMALE_POP = 0.52;
 const SLOTS = [['before', 'ก่อนเข้าเรียน', '07:00–08:00', 0.15], ['class', 'ระหว่างคาบเรียน', '08:30–15:30', 0.23], ['lunch', 'พักกลางวัน', '12:00–13:00', 0.44], ['after', 'หลังเลิกเรียน', '15:30–16:30', 0.18]];
 const MONTHS = [];
 (function genModel() {
   const r = mulberry32(77);
-  const base = { 4: 520, 5: 1180, 6: 1050, 7: 1210, 8: 1100, 10: 980, 11: 1040, 0: 1150, 1: 1320, 2: 410 };
+  const base = { 4: 520, 5: 1180, 6: 1050, 7: 1210, 8: 1100, 9: 760, 10: 980, 11: 1040, 0: 1150, 1: 1320, 2: 410 };
   SEMS.forEach((s, si) => s.months.forEach(([y, m]) => {
-    const partial = s.current && m === 8;
+    const partial = s.current && m === 9;
     let v = base[m] * s.f * (0.97 + r() * 0.06); if (partial) v *= PARTIAL;
     MONTHS.push({ y, m, sem: s.id, si, partial, visits: Math.round(v), loans: Math.round(v * (0.16 + r() * 0.02)), cls: Math.max(1, Math.round(v / 140 * (0.85 + r() * 0.3))) });
   }));
@@ -40,7 +41,7 @@ function semStats(si, F = {}) {
 function semCompare(si, F) {
   const cur = semStats(si, F); const prevIdx = si - 2; if (prevIdx < 0) return { cur, prev: null };
   const ms = MONTHS.filter(m => m.si === prevIdx);
-  const part = SEMS[si].current ? m => m.m === 8 ? PARTIAL : 1 : () => 1;
+  const part = SEMS[si].current ? m => m.m === 9 ? PARTIAL : 1 : () => 1;
   const sum = k => Math.round(ms.reduce((a, m) => a + m[k] * part(m), 0));
   const prevAll = semStats(prevIdx, F);
   const prev = { visits: Math.round(sum('visits') * factor(F)), loans: Math.round(sum('loans') * factor(F)), cls: Math.round(sum('cls') * factor(F, 'cls')), uniq: Math.round(prevAll.uniq * (SEMS[si].current ? 0.93 : 1)) };
@@ -55,7 +56,7 @@ function apportion(total, shares) {
 function monthStats(y, m) {
   const mo = MONTHS.find(x => x.y === y && x.m === m);
   const r = mulberry32(y * 12 + m);
-  const days = []; const last = mo.partial ? 14 : new Date(y, m + 1, 0).getDate();
+  const days = []; const last = mo.partial ? SESSION_CUT.getDate() : new Date(y, m + 1, 0).getDate();
   const hol = { '2026-7-12': 1, '2026-6-28': 1, '2026-6-29': 1, '2025-7-12': 1, '2025-11-5': 1, '2025-11-10': 1, '2026-0-1': 1 };
   for (let d = 1; d <= last; d++) { const dt = new Date(y, m, d); if (dt.getDay() && dt.getDay() < 6 && !hol[`${y}-${m}-${d}`]) days.push({ d: dt, w: 0.75 + r() * 0.5 + (dt.getDay() === 5 ? -0.15 : 0) }); }
   const W = days.reduce((a, x) => a + x.w, 0);
@@ -65,7 +66,7 @@ function monthStats(y, m) {
   const sv = apportion(mo.visits, SLOTS.map(s => s[3]));
   const bySlot = SLOTS.map((s, i) => ({ label: s[1], time: s[2], v: sv[i] }));
   const top = [...BOOKS].filter(b => b.g !== 'ref' && b.bc < '1000201').sort((a, b) => (hash(b.bc + m) % 30 + b.pop) - (hash(a.bc + m) % 30 + a.pop)).slice(0, 10).map((b, i) => ({ b, n: Math.max(3, Math.round(mo.loans / 22) - i) }));
-  const classes = mo.y === 2026 && mo.m === 8 ? S.classUse : Array.from({ length: mo.cls }, (_, i) => ({ d: days[Math.floor((i + 0.5) * days.length / mo.cls)].d, slot: `คาบ ${2 + (i * 3) % 5}`, teacher: ['ครูสมชาย ใจดี', 'ครูอรอุมา แสงทอง', 'ครูมาลี ศรีวงศ์', 'ครูธวัชชัย บุญมา'][i % 4], subj: ['ภาษาไทย', 'วิทยาศาสตร์', 'ภาษาอังกฤษ', 'สังคมศึกษา', 'กิจกรรมส่งเสริมการอ่าน'][i % 5], room: `ม.${1 + (i * 5) % 6}/${1 + i % 4}`, n: 32 + (i * 7) % 4 }));
+  const classes = mo.y === 2026 && mo.m === 9 ? S.classUse : Array.from({ length: mo.cls }, (_, i) => ({ d: days[Math.floor((i + 0.5) * days.length / mo.cls)].d, slot: `คาบ ${2 + (i * 3) % 5}`, teacher: ['ครูสมชาย ใจดี', 'ครูอรอุมา แสงทอง', 'ครูมาลี ศรีวงศ์', 'ครูธวัชชัย บุญมา'][i % 4], subj: ['ภาษาไทย', 'วิทยาศาสตร์', 'ภาษาอังกฤษ', 'สังคมศึกษา', 'กิจกรรมส่งเสริมการอ่าน'][i % 5], room: `ม.${1 + (i * 5) % 6}/${1 + i % 4}`, n: 32 + (i * 7) % 4 }));
   const uniq = Math.round(SCHOOL.students * (0.38 + r() * 0.12) * (mo.partial ? 0.7 : 1));
   return { mo, days, byGrade, bySlot, top, classes, uniq, returns: Math.round(mo.loans * 0.96) };
 }
@@ -127,15 +128,15 @@ function viewExec(q) {
   const delta = (a, b, unit) => { if (!b) return `<div class="delta">ไม่มีข้อมูลภาคเรียนเดียวกันปีก่อน</div>`; const p = Math.round((a - b) / b * 100); return `<div class="delta ${p > 0 ? 'up' : p < 0 ? 'down' : ''}">${p > 0 ? '+' : ''}${p}% จาก${sem.current ? 'ช่วงเดียวกัน' : 'ภาคเรียนเดียวกัน'}ปีก่อน (${fmt(b)}${unit})</div>`; };
   const sel = (name, label, opts) => `<label class="field"><span>${label}</span><select class="input" name="${name}">${opts.map(([v, t]) => `<option value="${v}" ${F[name] === v ? 'selected' : ''}>${t}</option>`).join('')}</select></label>`;
   const fac = factor(F);
-  const monthly = MONTHS.map(mo => ({ group: 'ภาคเรียน ' + mo.sem, label: TM[mo.m], v: Math.round(mo.visits * fac), hi: mo.si === si, tip: `<b>${monthLabel(mo, true)}</b>|ผู้เข้าใช้ ${fmt(Math.round(mo.visits * fac))} ครั้ง${mo.partial ? '|ถึง 14 ก.ย. 2569' : ''}` }));
-  const semBars = k => SEMS.map((s, i) => { const v = semStats(i, F)[k]; return { group: '', label: s.id, v, hi: i === si, lab: i === si ? fmt(v) : '', tip: `<b>ภาคเรียน ${s.id}</b>|${k === 'loans' ? 'ยืม' : 'ใช้เป็นห้องเรียน'} ${fmt(v)} ${k === 'loans' ? 'เล่ม' : 'ครั้ง'}${s.current ? '|ถึง 14 ก.ย. 2569' : ''}` }; });
+  const monthly = MONTHS.map(mo => ({ group: 'ภาคเรียน ' + mo.sem, label: TM[mo.m], v: Math.round(mo.visits * fac), hi: mo.si === si, tip: `<b>${monthLabel(mo, true)}</b>|ผู้เข้าใช้ ${fmt(Math.round(mo.visits * fac))} ครั้ง${mo.partial ? '|ถึง ' + thDate(SESSION_CUT) : ''}` }));
+  const semBars = k => SEMS.map((s, i) => { const v = semStats(i, F)[k]; return { group: '', label: s.id, v, hi: i === si, lab: i === si ? fmt(v) : '', tip: `<b>ภาคเรียน ${s.id}</b>|${k === 'loans' ? 'ยืม' : 'ใช้เป็นห้องเรียน'} ${fmt(v)} ${k === 'loans' ? 'เล่ม' : 'ครั้ง'}${s.current ? '|ถึง ' + thDate(SESSION_CUT) : ''}` }; });
   const semMs = MONTHS.filter(m => m.si === si), semV = semMs.reduce((a, m) => a + m.visits, 0);
   const F2 = { ...F, slot: '' }, fg = factor(F2);
   const slotRows = SLOTS.map(s => { const v = Math.round(semV * fg * s[3]); return { label: s[1], v, hi: !F.slot || F.slot === s[0], tip: `<b>${s[1]}</b> ${s[2]} น.|${fmt(v)} ครั้ง (${Math.round(s[3] * 100)}%)` }; });
   const F3 = { ...F, grade: '' }, fgr = factor(F3);
   const inSel = g => !F.grade || F.grade === String(g) || (F.grade === 'low' && g <= 3) || (F.grade === 'high' && g >= 4);
   const gradeRows = GRADE_SH.map((sh, i) => { const v = Math.round(semV * fgr * sh), per = v / (SCHOOL.students / 6 * (F.gender === 'f' ? FEMALE_POP : F.gender === 'm' ? 1 - FEMALE_POP : 1)); return { label: 'ม.' + (i + 1), v, hi: inSel(i + 1), tip: `<b>ม.${i + 1}</b>|${fmt(v)} ครั้ง|เฉลี่ย ${per.toFixed(1)} ครั้งต่อคน` }; });
-  const top = monthStats(...(sem.current ? [2026, 7] : [sem.months[3][0], sem.months[3][1]])).top;
+  const top = monthStats(...(sem.current ? [2026, 8] : [sem.months[3][0], sem.months[3][1]])).top;
   const semName = s => `ภาคเรียนที่ ${s.id}${s.current ? ' (ปัจจุบัน)' : ''}`;
   const filtTxt = [F.grade && GRADE_OPTS.find(g => g[0] === F.grade)[1], F.gender && (F.gender === 'f' ? 'นักเรียนหญิง' : 'นักเรียนชาย'), F.slot && SLOTS.find(s => s[0] === F.slot)[1]].filter(Boolean).join(' ');
   const html = `<header class="e-top">${schoolMark('ภาพรวมห้องสมุดสำหรับผู้บริหาร')}<span class="grow"></span><span class="small muted noprint">ข้อมูลถึง ${thDate(TODAY)}</span><button class="btn noprint acts" data-print>${ICON.print}ดาวน์โหลด PDF</button>${fszControl()}</header>
@@ -158,16 +159,16 @@ function viewExec(q) {
       </section>
       <div class="charts">
         <section class="panel chart wide" aria-labelledby="c1"><div class="chart-h"><h2 id="c1">ผู้เข้าใช้รายเดือน 4 ภาคเรียน</h2><button type="button" class="linkbtn" data-table="t1" aria-expanded="false">ดูเป็นตาราง</button></div>
-          <p class="chart-sub">แท่งสีเข้มคือภาคเรียนที่เลือก เดือน ต.ค. และ เม.ย. เป็นช่วงปิดภาคเรียน เดือน ก.ย. 2569 นับถึงวันที่ 14</p>
+          <p class="chart-sub">แท่งสีเข้มคือภาคเรียนที่เลือก เดือน เม.ย. เป็นช่วงปิดภาคเรียนเต็มเดือน เดือน ต.ค. 2569 เปิดเรียนถึงวันที่ ${SESSION_CUT.getDate()} ก่อนปิดภาคเรียน</p>
           ${chartCols(monthly, { w: 1040, h: 250, groups: true, aria: 'กราฟแท่งจำนวนผู้เข้าใช้รายเดือน' })}
           <div class="legend"><span><i style="background:${C_HI}"></i>ภาคเรียนที่เลือก</span><span><i style="background:${C_LO}"></i>ภาคเรียนอื่น</span></div>
-          <div id="t1" hidden><table class="tbl" style="margin-top:12px"><thead><tr><th>เดือน</th><th>ภาคเรียน</th><th class="num">ผู้เข้าใช้ (ครั้ง)</th><th class="num">ยืม (เล่ม)</th></tr></thead><tbody>${MONTHS.map(mo => `<tr><td>${monthLabel(mo, true)}${mo.partial ? ' (ถึง 14 ก.ย.)' : ''}</td><td>${mo.sem}</td><td class="num">${fmt(Math.round(mo.visits * fac))}</td><td class="num">${fmt(Math.round(mo.loans * fac))}</td></tr>`).join('')}</tbody></table></div>
+          <div id="t1" hidden><table class="tbl" style="margin-top:12px"><thead><tr><th>เดือน</th><th>ภาคเรียน</th><th class="num">ผู้เข้าใช้ (ครั้ง)</th><th class="num">ยืม (เล่ม)</th></tr></thead><tbody>${MONTHS.map(mo => `<tr><td>${monthLabel(mo, true)}${mo.partial ? ' (ถึง ' + thShort(SESSION_CUT) + ')' : ''}</td><td>${mo.sem}</td><td class="num">${fmt(Math.round(mo.visits * fac))}</td><td class="num">${fmt(Math.round(mo.loans * fac))}</td></tr>`).join('')}</tbody></table></div>
         </section>
         <section class="panel chart" aria-labelledby="c2"><div class="chart-h"><h2 id="c2">การยืมหนังสือรายภาคเรียน</h2></div><p class="chart-sub">หน่วย: เล่ม</p>${chartCols(semBars('loans'), { w: 460, h: 210, pad: 40, aria: 'กราฟแท่งจำนวนการยืมรายภาคเรียน' })}</section>
         <section class="panel chart" aria-labelledby="c3"><div class="chart-h"><h2 id="c3">ใช้ห้องสมุดเป็นห้องเรียน</h2></div><p class="chart-sub">หน่วย: ครั้ง ครูบันทึกพร้อมรายวิชาและจำนวนนักเรียน</p>${chartCols(semBars('cls'), { w: 460, h: 210, pad: 40, aria: 'กราฟแท่งจำนวนครั้งที่ใช้เป็นห้องเรียน' })}</section>
         <section class="panel chart" aria-labelledby="c4"><div class="chart-h"><h2 id="c4">ช่วงเวลาที่เข้าใช้</h2></div><p class="chart-sub">ผู้เข้าใช้ในภาคเรียนที่เลือก หน่วย: ครั้ง</p>${chartRows(slotRows, { aria: 'กราฟแท่งแนวนอนตามช่วงเวลา' })}</section>
         <section class="panel chart" aria-labelledby="c5"><div class="chart-h"><h2 id="c5">ระดับชั้น</h2></div><p class="chart-sub">ผู้เข้าใช้ในภาคเรียนที่เลือก หน่วย: ครั้ง</p>${chartRows(gradeRows, { left: 60, aria: 'กราฟแท่งแนวนอนตามระดับชั้น' })}</section>
-        <section class="panel chart wide" aria-labelledby="c6"><div class="chart-h"><h2 id="c6">หนังสือที่ถูกยืมมากที่สุด</h2><span class="small muted">${sem.current ? 'เดือน ส.ค. 2569' : 'เดือนที่ 4 ของภาคเรียน'}</span></div>
+        <section class="panel chart wide" aria-labelledby="c6"><div class="chart-h"><h2 id="c6">หนังสือที่ถูกยืมมากที่สุด</h2><span class="small muted">${sem.current ? 'เดือน ก.ย. 2569' : 'เดือนที่ 4 ของภาคเรียน'}</span></div>
           <ol class="toplist" style="columns:2;column-gap:32px">${top.map(x => `<li style="break-inside:avoid">${cover(x.b)}<span>${esc(shortTitle(x.b.t))}<br><span class="small muted">${esc(x.b.type)}</span></span><span class="num small">${x.n} ครั้ง</span></li>`).join('')}</ol></section>
       </div>
       <p class="small muted" style="margin-top:18px">เริ่มเก็บข้อมูลในปันอ่านตั้งแต่ภาคเรียนที่ 2/2567 ข้อมูลเก็บถาวรแม้เปลี่ยนครูผู้รับผิดชอบ</p>
@@ -198,7 +199,7 @@ function execTabs(cur) {
   return `<nav class="seg noprint" aria-label="มุมมองผู้บริหาร" style="max-width:520px;margin-bottom:18px">${tab('#/e', 'การใช้ห้องสมุด')}${tab('#/e/budget', 'งบประมาณทรัพยากรสารสนเทศ')}</nav>`;
 }
 function viewExecBudget(q) {
-  const fy = FY_LIST.includes(+q.fy) ? +q.fy : FY_NOW;
+  const fy = FY_LIST.includes(+q.fy) ? +q.fy : FY_LIST[FY_LIST.length - 1];
   const by = q.by === 'q' ? 'q' : 'fy';
   const qs = by === 'q' && ['1', '2', '3', '4'].includes(q.q) ? +q.q : 0;
   const cur = acqSum(acqIn(fy, qs));
@@ -210,8 +211,8 @@ function viewExecBudget(q) {
     const p = Math.round((a - b) / b * 100);
     return `<div class="delta ${p > 0 ? 'up' : p < 0 ? 'down' : ''}">${p > 0 ? '+' : ''}${p}% จาก${qs ? 'ไตรมาสเดียวกัน' : ''}ปีงบประมาณ ${fy - 1} (${unit === 'บาท' ? baht(b) : fmt(b) + ' ' + unit})</div>`;
   };
-  const fyBars = FY_LIST.map(y => { const s = acqSum(acqIn(y, qs)); return { group: '', label: String(y), v: s.spend, hi: y === fy, lab: y === fy ? fmt(s.spend) : '', tip: `<b>ปีงบประมาณ ${y}</b>${qs ? `|ไตรมาส ${qs} (${qRange(qs)})` : ''}|จัดหา ${baht(s.spend)}|${fmt(s.bought)} รายการ${y === FY_NOW ? '|ถึง 14 ก.ย. 2569' : ''}` }; });
-  const qBars = [1, 2, 3, 4].map(i => { const s = acqSum(acqIn(fy, i)); return { group: '', label: `ไตรมาส ${i}`, v: s.spend, hi: !qs || qs === i, lab: fmt(s.spend), tip: `<b>ไตรมาส ${i}</b> ${qRange(i)}|จัดหา ${baht(s.spend)}|${fmt(s.bought)} รายการ${partial && i === 4 ? '|ถึง 14 ก.ย. 2569' : ''}` }; });
+  const fyBars = FY_LIST.map(y => { const s = acqSum(acqIn(y, qs)); return { group: '', label: String(y), v: s.spend, hi: y === fy, lab: y === fy ? fmt(s.spend) : '', tip: `<b>ปีงบประมาณ ${y}</b>${qs ? `|ไตรมาส ${qs} (${qRange(qs)})` : ''}|จัดหา ${baht(s.spend)}|${fmt(s.bought)} รายการ${y === FY_NOW ? '|ถึง ' + thDate(TODAY) : ''}` }; });
+  const qBars = [1, 2, 3, 4].map(i => { const s = acqSum(acqIn(fy, i)); return { group: '', label: `ไตรมาส ${i}`, v: s.spend, hi: !qs || qs === i, lab: fmt(s.spend), tip: `<b>ไตรมาส ${i}</b> ${qRange(i)}|จัดหา ${baht(s.spend)}|${fmt(s.bought)} รายการ${partial && i === 1 ? '|ถึง ' + thDate(TODAY) : ''}` }; });
   const bars = by === 'q' ? qBars : fyBars;
   const list = acqIn(fy, qs);
   const byType = ['text', 'exam', 'lit', 'nf', 'comic', 'ref'].map(g => {
@@ -228,7 +229,7 @@ function viewExecBudget(q) {
     <main class="e-body">
       ${execTabs('#/e/budget')}
       <h1 tabindex="-1" style="margin-bottom:4px">งบประมาณทรัพยากรสารสนเทศ ${esc(periodTxt)}</h1>
-      <p class="muted" style="margin-bottom:18px">ปีงบประมาณเริ่ม 1 ตุลาคม และสิ้นสุด 30 กันยายน${partial ? ' ข้อมูลปีงบประมาณปัจจุบันนับถึง 14 ก.ย. 2569 จึงยังไม่ครบปี' : ''}</p>
+      <p class="muted" style="margin-bottom:18px">ปีงบประมาณเริ่ม 1 ตุลาคม และสิ้นสุด 30 กันยายน${partial ? ' ข้อมูลปีงบประมาณปัจจุบันนับถึง ' + thDate(TODAY) + ' จึงยังไม่ครบปี' : ''}</p>
       <form class="frow" data-bf aria-label="เลือกช่วงเวลา">
         ${sel('fy', 'ปีงบประมาณ', [...FY_LIST].reverse().map(y => [String(y), `ปีงบประมาณ ${y}${y === FY_NOW ? ' (ปัจจุบัน)' : ''}`]), fy)}
         ${sel('by', 'แสดงเป็น', [['fy', 'เปรียบเทียบรายปีงบประมาณ'], ['q', 'แยกรายไตรมาส']], by)}
