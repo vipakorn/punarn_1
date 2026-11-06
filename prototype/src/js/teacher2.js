@@ -448,6 +448,8 @@ function tSettings() {
         <label class="field"><span>ยืมได้สูงสุด <em>(เล่มต่อคน)</em></span><input class="input" name="max" type="number" min="1" max="10" value="${P.max}"></label>
         <label class="field"><span>ระยะเวลายืม <em>(วัน)</em></span><input class="input" name="days" type="number" min="1" max="30" value="${P.days}"></label>
         <label class="field"><span>ต่ออายุได้ <em>(ครั้ง)</em></span><input class="input" name="renew" type="number" min="0" max="3" value="${P.renew}"></label>
+        <label class="field"><span>ค่าปรับเกินกำหนด <em>(บาทต่อวันต่อเล่ม)</em></span><input class="input" name="fine" type="number" min="0" max="100" step="1" inputmode="numeric" value="${P.fine}" aria-describedby="fine-help"></label>
+        <p class="small muted full" id="fine-help" style="margin:-4px 0 0">อัตราใหม่ใช้กับหนังสือที่ยืมตั้งแต่วันที่บันทึกเป็นต้นไป เล่มที่ยืมไปแล้วคิดตามอัตราเดิมในวันที่ยืม ใส่ 0 หากไม่เก็บค่าปรับ</p><div id="fine-err" class="full" aria-live="polite"></div>
         <label class="field full"><span>เมื่อมีหนังสือเกินกำหนด</span><select class="input" name="block"><option value="0" ${P.block ? '' : 'selected'}>เตือน แต่ยังยืมเล่มใหม่ได้</option><option value="1" ${P.block ? 'selected' : ''}>ต้องคืนก่อน จึงยืมเล่มใหม่ได้</option></select></label>
       </div><p class="small muted" style="margin-top:10px">ถ้าวันครบกำหนดตรงกับวันหยุด ระบบเลื่อนเป็นวันเปิดเรียนถัดไปให้</p></section>
       <section class="panel"><h2 style="margin-bottom:14px">Kiosk และมุมจัดเก็บ</h2><div class="grid2">
@@ -461,7 +463,11 @@ function tSettings() {
         e.preventDefault(); const d = Object.fromEntries(new FormData(e.target));
         if (!/^\d{4,6}$/.test(d.pin)) { $('#pin-err', root).innerHTML = '<div class="msg err" role="alert">PIN ต้องเป็นตัวเลข 4–6 หลัก</div>'; return $('#set-pin', root).focus(); }
         $('#pin-err', root).innerHTML = '';
-        Object.assign(S.policy, { max: +d.max || 3, days: +d.days || 7, renew: +d.renew || 0, block: d.block === '1' });
+        const fine = Number(d.fine);
+        if (d.fine === '' || !Number.isInteger(fine) || fine < 0 || fine > 100) { $('#fine-err', root).innerHTML = '<div class="msg err" role="alert">ค่าปรับต้องเป็นจำนวนเต็ม 0–100 บาท</div>'; return root.querySelector('[name=fine]').focus(); }
+        $('#fine-err', root).innerHTML = '';
+        if (fine !== S.policy.fine) S.audit.unshift({ t: now(), who: ME().name, what: `เปลี่ยนอัตราค่าปรับจาก ${S.policy.fine} เป็น ${fine} บาทต่อวันต่อเล่ม มีผลกับการยืมตั้งแต่ ${thDate(TODAY)}`, perm: true });
+        Object.assign(S.policy, { max: +d.max || 3, days: +d.days || 7, renew: +d.renew || 0, block: d.block === '1', fine });
         if (d.pin !== S.pin) { S.pin = d.pin; S.audit.unshift({ t: now(), who: ME().name, what: 'เปลี่ยน PIN สำหรับออกจากโหมด kiosk', perm: true }); }
         S.audit.unshift({ t: now(), who: ME().name, what: `แก้นโยบายการยืม: ${S.policy.days} วัน ${S.policy.max} เล่ม` });
         const pin = $('#set-pin', root); if (pin.type === 'text') $('[data-reveal="set-pin"]', root).click();

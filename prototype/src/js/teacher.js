@@ -167,8 +167,8 @@ function tCirc() {
           ${C.sub === 'return' ? scanForm('สแกนบาร์โค้ดหนังสือที่จะคืน หรือพิมพ์เลขทะเบียน', 'เลขทะเบียน 7 หลัก') : scanForm('สแกนบาร์โค้ดหนังสือที่จะยืม หรือพิมพ์เลขทะเบียน', 'เลขทะเบียน 7 หลัก')}
           ${tryRow(tries)}${msgBox()}
           ${!A && my.length ? `<h3 class="list-h">หนังสือที่ค้างอยู่ ${my.length} เล่ม</h3><div class="basket">${my.map(loanRow).join('')}</div>` : ''}
-          ${C.basket.length ? `<h3 class="list-h">จะยืม ${C.basket.length} เล่ม คืนภายใน ${thShort(due)}</h3><div class="basket" aria-label="หนังสือที่จะยืม">${C.basket.map(bc => { const b = BY[bc]; return `<div class="item">${cover(b)}<div><div class="t" style="font-weight:500">${esc(shortTitle(b.t))}</div><div class="small muted">${esc(b.call)} เลขทะเบียน ${bc}</div></div><span></span><button type="button" class="btn ghost sm" data-rm="${bc}" aria-label="นำ ${esc(shortTitle(b.t))} ออก">นำออก</button></div>`; }).join('')}</div>` : ''}
-          ${C.sret.length ? `<h3 class="list-h">คืนแล้วรอบนี้ ${C.sret.length} เล่ม</h3><div class="basket">${C.sret.map(x => { const b = BY[x.bc]; return `<div class="item">${cover(b)}<div><div style="font-weight:500">${esc(shortTitle(b.t))}</div><div class="small">วางกลับที่${esc(b.loc)}</div></div>${x.late ? `<span class="pill late">เกิน ${x.late} วัน · ${x.late * FINE_RATE} บาท</span>` : '<span class="pill ok">คืนตรงเวลา</span>'}${spine(b.call, 'sm')}</div>`; }).join('')}</div>` : ''}
+          ${C.basket.length ? `<h3 class="list-h">จะยืม ${C.basket.length} เล่ม คืนภายใน ${thShort(due)}${S.policy.fine ? ` · เกินกำหนดปรับวันละ ${fmt(S.policy.fine)} บาท` : ''}</h3><div class="basket" aria-label="หนังสือที่จะยืม">${C.basket.map(bc => { const b = BY[bc]; return `<div class="item">${cover(b)}<div><div class="t" style="font-weight:500">${esc(shortTitle(b.t))}</div><div class="small muted">${esc(b.call)} เลขทะเบียน ${bc}</div></div><span></span><button type="button" class="btn ghost sm" data-rm="${bc}" aria-label="นำ ${esc(shortTitle(b.t))} ออก">นำออก</button></div>`; }).join('')}</div>` : ''}
+          ${C.sret.length ? `<h3 class="list-h">คืนแล้วรอบนี้ ${C.sret.length} เล่ม</h3><div class="basket">${C.sret.map(x => { const b = BY[x.bc]; return `<div class="item">${cover(b)}<div><div style="font-weight:500">${esc(shortTitle(b.t))}</div><div class="small">วางกลับที่${esc(b.loc)}</div></div>${x.late ? `<span class="pill late">เกิน ${x.late} วัน · ${fmt(x.fine)} บาท</span>` : '<span class="pill ok">คืนตรงเวลา</span>'}${spine(b.call, 'sm')}</div>`; }).join('')}</div>` : ''}
           <div class="row" style="justify-content:flex-end;margin-top:18px"><button type="button" class="btn" data-cancel>ยกเลิก</button><button type="button" class="btn primary" data-done>เสร็จสิ้น${C.basket.length ? ` (บันทึกการยืม ${C.basket.length} เล่ม)` : ''}</button></div>
           <p class="small muted" style="text-align:right;margin-top:6px">การคืนบันทึกทันทีที่สแกน การยืมบันทึกเมื่อกดเสร็จสิ้น หรือกด Enter ที่ช่องว่าง</p>`;
         bind();
@@ -188,8 +188,8 @@ function tCirc() {
         const l = loanOf(bc), b = BY[bc]; const late = Math.max(0, -diffDays(l.due, TODAY));
         S.loans = S.loans.filter(x => x !== l); b.s = 'on';
         S.log.push({ type: 'return', bc, sid: l.sid, t: now(), late }); enqueue({ type: 'return', bc });
-        addOwed(l.sid, late * FINE_RATE);
-        return { bc, sid: l.sid, late };
+        const fine = late * rateOf(l); addOwed(l.sid, fine);
+        return { bc, sid: l.sid, late, fine };
       }
       function scan(val) {
         val = val.trim(); if (!val) { if (C.mode === 'borrow' && C.patron) finish(); return; }
@@ -230,11 +230,11 @@ function tCirc() {
       }
       function returnMine(bc) {
         const b = BY[bc], r = doReturn(bc); C.sret.unshift(r);
-        C.msg = { k: 'ok', h: `<b>บันทึกการคืนแล้ว</b>&nbsp;${esc(shortTitle(b.t))} ${r.late ? `เกินกำหนด ${r.late} วัน ค่าปรับ ${r.late * FINE_RATE} บาท` : 'คืนตรงเวลา'}${S.offline ? ' (เก็บไว้ในเครื่อง รอส่ง)' : ''}` };
+        C.msg = { k: 'ok', h: `<b>บันทึกการคืนแล้ว</b>&nbsp;${esc(shortTitle(b.t))} ${r.late ? `เกินกำหนด ${r.late} วัน ${r.fine ? `ค่าปรับ ${fmt(r.fine)} บาท` : 'ไม่คิดค่าปรับ'}` : 'คืนตรงเวลา'}${S.offline ? ' (เก็บไว้ในเครื่อง รอส่ง)' : ''}` };
       }
       function finish() {
         const me = SBY[C.patron], due = nextSchoolDay(addDays(TODAY, S.policy.days)), nB = C.basket.length, nR = C.sret.length;
-        C.basket.forEach(bc => { S.loans.push({ bc, sid: me.id, out: now(), due }); BY[bc].s = 'out'; S.log.push({ type: 'borrow', bc, sid: me.id, t: now(), live: true }); enqueue({ type: 'borrow', bc }); });
+        C.basket.forEach(bc => { S.loans.push({ bc, sid: me.id, out: now(), due, rate: S.policy.fine }); BY[bc].s = 'out'; S.log.push({ type: 'borrow', bc, sid: me.id, t: now(), live: true }); enqueue({ type: 'borrow', bc }); });
         const nO = C.over.filter(bc => C.basket.includes(bc)).length;
         if (nO) S.audit.unshift({ t: now(), who: ME().name, what: `อนุมัติให้ยืมเกินจำนวนสูงสุด ${nO} เล่ม แก่นักเรียนรหัส ${me.id} ${cls(me)} รวมยืมอยู่ ${loansOf(me.id).length} เล่ม (สูงสุด ${S.policy.max})` });
         const fine = fineTotal(me.id), parts = [nB && `ยืม ${nB} เล่ม${nO ? ` (เกินจำนวนสูงสุด ${nO} เล่ม)` : ''} คืนภายใน ${thDate(due)}`, nR && `คืน ${nR} เล่ม`].filter(Boolean);

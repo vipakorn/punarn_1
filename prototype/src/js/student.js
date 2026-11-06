@@ -250,7 +250,7 @@ function sLate() {
     const b = BY[l.bc], d = lateDays(l);
     return `<a class="loan soon" href="#/s/book/${b.bc}">${cover(b)}<div><div style="font-weight:500;line-height:1.4">${esc(shortTitle(b.t))}</div>
       <div class="due">เกินกำหนด ${d} วัน ครบกำหนด ${thShort(l.due)}</div>
-      <div class="small muted">ค่าปรับขณะนี้ ${d} บาท (วันละ ${FINE_RATE} บาท)</div></div></a>`;
+      <div class="small muted">${rateOf(l) ? `ค่าปรับขณะนี้ ${fmt(fineOf(l))} บาท (วันละ ${fmt(rateOf(l))} บาท ตามอัตราวันที่ยืม)` : 'ไม่คิดค่าปรับ'}</div></div></a>`;
   };
   const okRow = l => { const b = BY[l.bc], d = dueText(l.due); return `<a class="loan" href="#/s/book/${b.bc}">${cover(b)}<div><div style="font-weight:500;line-height:1.4">${esc(shortTitle(b.t))}</div><div class="due">${d.txt}</div></div></a>`; };
   return {
@@ -263,7 +263,7 @@ function sLate() {
         <div class="fine-num num">${fmt(total)} บาท</div>
         <div class="small">${late.length ? `${late.length} เล่มที่ยังไม่คืน` : ''}${late.length && owed ? ' และ' : ''}${owed ? `ค่าปรับจากเล่มที่คืนล่าช้าแล้ว ${owed} บาท` : ''} ชำระที่เคาน์เตอร์ห้องสมุด</div>
       </div>
-      <p class="small muted" style="margin-top:10px">ค่าปรับคิดวันละ ${FINE_RATE} บาทต่อเล่ม นับทุกวันรวมวันหยุด และจะเพิ่มขึ้นทุกวันจนกว่าจะนำมาคืน</p>
+      <p class="small muted" style="margin-top:10px">${(r => r.length === 1 ? `ค่าปรับคิดวันละ ${fmt(r[0])} บาทต่อเล่ม` : 'ค่าปรับคิดตามอัตราที่ใช้ในวันที่ยืมแต่ละเล่ม')([...new Set(late.map(rateOf))])} นับทุกวันรวมวันหยุด และเพิ่มขึ้นทุกวันจนกว่าจะนำมาคืน</p>
     </section>
     ${late.length ? `<section class="sec"><div class="sec-h"><h2>รายการที่เกินกำหนด</h2></div>
       <div class="stack">${late.map(row).join('')}</div></section>` : ''}`

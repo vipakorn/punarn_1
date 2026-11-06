@@ -202,7 +202,7 @@ const ASSIST_IDS = ['43105', '42214', '41330', '40407'];
 /* ---------- app state (in memory only) ---------- */
 const S = {
   role: 'teacher', me: 's1', exported: {}, student: null, offline: false, queue: [],
-  policy: { max: 3, days: 7, renew: 1, block: false }, pin: '1234',
+  policy: { max: 3, days: 7, renew: 1, block: false, fine: 1 }, pin: '1234',
   loans: [], visits: [], log: [], drafts: [], classUse: [], labelQueue: [], audit: [], back: [],
   kioskOpened: false, circ: null, cat: null
 };
@@ -257,10 +257,13 @@ BY['1000093'] && (BY['1000093'].s = 'repair');
 const loanOf = bc => S.loans.find(l => l.bc === bc);
 const loansOf = sid => S.loans.filter(l => l.sid === sid);
 const overdue = () => S.loans.filter(l => diffDays(l.due, TODAY) < 0).sort((a, b) => a.due - b.due);
-/* ค่าปรับ: วันละ 1 บาทต่อเล่ม นับทุกวันรวมวันหยุด */
-const FINE_RATE = 1;
+/* ค่าปรับ: อัตราบาทต่อวันต่อเล่มตั้งในหน้าตั้งค่าโรงเรียน นับทุกวันรวมวันหยุด
+   อัตราถูกบันทึกไว้กับรายการยืม ณ วันที่ยืม (l.rate) การแก้อัตรามีผลกับการยืมครั้งต่อไปเท่านั้น
+   รายการยืมที่เกิดก่อนมีการตั้งค่านี้ใช้อัตราเดิมของระบบ 1 บาท */
+const LEGACY_FINE = 1;
+const rateOf = l => (l && l.rate != null) ? l.rate : LEGACY_FINE;
 const lateDays = l => Math.max(0, -diffDays(l.due, TODAY));
-const fineOf = l => lateDays(l) * FINE_RATE;
+const fineOf = l => lateDays(l) * rateOf(l);
 const overdueOf = sid => loansOf(sid).filter(l => lateDays(l) > 0).sort((a, b) => a.due - b.due);
 /* ค่าปรับค้างชำระจากเล่มที่คืนล่าช้าไปแล้ว (บันทึกตอนรับคืน) */
 const owedOf = sid => (S.fineOwed && S.fineOwed[sid]) || 0;
