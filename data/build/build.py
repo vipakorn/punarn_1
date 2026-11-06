@@ -136,6 +136,22 @@ for n, rec in enumerate(records, 1):
                  DDC_CLASS[rec['ddc'][0]], rec['ddc'], rec['call'], rec['subjects'], rec['level'],
                  location(rec['rtype'], rec['eng']), status, rec['cover'], rec['source'], rec['note']])
 
+# เลขเรียกหนังสือซ้ำระหว่างหนังสือต่างเรื่อง: เติมเลขเล่ม (ล.N) ถ้าทุกเล่มในกลุ่มมีเลขเล่มในชื่อเรื่อง
+# ไม่อย่างนั้นเติมปีพิมพ์ ทำหลังแจกเลขทะเบียนแล้ว เพื่อไม่ให้ลำดับและเลขทะเบียนบนบาร์โค้ดเปลี่ยน
+VOL = re.compile(r'(?:เล่ม|ภาค|ล\.|vol\.?|volume|book)\s*(\d+)', re.I)
+groups = {}
+for row in rows:
+    groups.setdefault(row[13], []).append(row)
+for call, g in groups.items():
+    if len({row[3] for row in g}) < 2:
+        continue
+    vols = [VOL.search(row[3]) for row in g]
+    for row, v in zip(g, vols):
+        row[13] = '%s ล.%s' % (call, v.group(1)) if all(vols) else '%s %s' % (call, row[7])
+calls = [r[13] for r in rows]
+if len(set(calls)) != len(calls):
+    problems.append(('dup call', {c for c in calls if calls.count(c) > 1}))
+
 # duplicate checks
 isbns = [r[2] for r in rows if r[2]]
 dups = {i for i in isbns if isbns.count(i) > 1}
